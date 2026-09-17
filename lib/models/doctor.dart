@@ -76,34 +76,50 @@ class Doctor {
   factory Doctor.fromMap(
       Map<String, dynamic> map,
       ) {
-    final legacyFullName = _stringValue(
-      map['full_name'],
+    final rawName = _firstNonEmpty(
+      <dynamic>[
+        map['full_name'],
+        map['doctor_name'],
+        map['doctor name'],
+        map['physician_name'],
+        map['physician name'],
+        map['name'],
+      ],
     );
 
-    final nameEn = _firstEnglishValue(
+    var nameEn = _firstEnglishValue(
       <dynamic>[
         map['full_name_en'],
         map['name_en'],
         map['doctor_name_en'],
-        legacyFullName,
+        rawName,
       ],
     );
 
-    final nameAr = _firstArabicValue(
+    var nameAr = _firstArabicValue(
       <dynamic>[
         map['full_name_ar'],
         map['name_ar'],
         map['doctor_name_ar'],
-        legacyFullName,
+        rawName,
       ],
     );
+
+    if (nameEn.isEmpty && nameAr.isEmpty && rawName.isNotEmpty) {
+      if (_isGoodArabicValue(rawName)) {
+        nameAr = rawName;
+      } else {
+        nameEn = rawName;
+      }
+    }
 
     final legacySpecialty = _firstNonEmpty(
       <dynamic>[
         map['main_specialty'],
         map['specialty'],
+        map['specialties'],
       ],
-    );
+    ).replaceAll(RegExp(r';+$'), '').trim();
 
     final specialtyEn = _firstEnglishValue(
       <dynamic>[
@@ -117,6 +133,7 @@ class Doctor {
       <dynamic>[
         map['specialty_ar'],
         map['specialty_arabic'],
+        legacySpecialty,
       ],
     );
 
@@ -131,9 +148,13 @@ class Doctor {
       map['clinic_name'],
     );
 
-    final hospitalName = _stringValue(
-      map['hospital_name'],
-    );
+    final hospitalName = _firstNonEmpty(
+      <dynamic>[
+        map['hospital_name'],
+        map['hospitals'],
+        map['hospital'],
+      ],
+    ).replaceAll(RegExp(r';+$'), '').trim();
 
     final hospitalClinic = _firstNonEmpty(
       <dynamic>[
@@ -165,13 +186,23 @@ class Doctor {
       ],
     );
 
-    return Doctor(
-      id: _stringValue(
+    final docId = _firstNonEmpty(
+      <dynamic>[
         map['id'],
-      ),
+        map['doctor_code'],
+        map['physician_code'],
+        map['physician code'],
+        map['generated_id'],
+      ],
+    );
+
+    return Doctor(
+      id: docId.isNotEmpty ? docId : 'doc_id',
       doctorCode: _firstNonEmpty(
         <dynamic>[
           map['doctor_code'],
+          map['physician_code'],
+          map['physician code'],
           map['external_doctor_id'],
           map['external_id'],
           map['order_number'],

@@ -18,7 +18,7 @@ class DoctorsScreen extends StatefulWidget {
 }
 
 class _DoctorsScreenState extends State<DoctorsScreen> {
-  static const int _pageSize = 50;
+  static const int _pageSize = 500;
 
   static const Duration _searchDelay = Duration(milliseconds: 350);
 
@@ -1787,30 +1787,42 @@ class _PaginationFooter extends StatelessWidget {
 
     if (loading) {
       return const Padding(
-        padding: EdgeInsets.all(18),
+        padding: EdgeInsets.all(24),
         child: Center(child: CircularProgressIndicator()),
       );
     }
 
     if (!hasMore) {
       return Padding(
-        padding: const EdgeInsets.all(18),
+        padding: const EdgeInsets.all(24),
         child: Center(
           child: Text(
             isArabic ? 'نهاية النتائج' : 'End of results',
-            style: TextStyle(color: palette.textMuted),
+            style: TextStyle(color: palette.textMuted, fontWeight: FontWeight.w600),
           ),
         ),
       );
     }
 
     return Padding(
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
       child: Center(
-        child: OutlinedButton.icon(
+        child: ElevatedButton.icon(
           onPressed: onLoad,
-          icon: const Icon(Icons.expand_more_rounded),
-          label: Text(isArabic ? 'تحميل المزيد' : 'Load more'),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: PharmaLensColors.teal,
+            foregroundColor: Colors.white,
+            padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            elevation: 2,
+          ),
+          icon: const Icon(Icons.add_circle_outline_rounded, size: 20),
+          label: Text(
+            isArabic ? 'تحميل المزيد (500 طبيب)' : 'Press More (Load 500 More)',
+            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800),
+          ),
         ),
       ),
     );
