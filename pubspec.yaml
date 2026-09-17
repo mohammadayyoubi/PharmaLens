@@ -1,0 +1,52 @@
+name: pharmalens
+description: "Smart prescription reading and medicine safety assistant."
+publish_to: "none"
+
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  flutter_localizations:
+    sdk: flutter
+
+  intl: any
+  cupertino_icons: ^1.0.8
+
+  image_picker: ^1.1.2
+  google_mlkit_text_recognition: ^0.14.0
+
+  hive: ^2.2.3
+  hive_flutter: ^1.1.0
+  path_provider: ^2.1.4
+
+  string_similarity: ^2.0.0
+  http: ^1.2.2
+  url_launcher: ^6.3.0
+
+  geolocator: ^13.0.1
+  google_maps_flutter: ^2.10.0
+
+  supabase_flutter: ^2.8.0
+  shared_preferences: ^2.3.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+  # flutter_lints: ^5.0.0
+
+flutter:
+  uses-material-design: true
+  generate: true
+
+  assets:
+    - assets/medicines/medicines.csv
+    - assets/medicines/medicine_details.json
+    - assets/medicines/lebanon_medicine_prices.csv
+    - assets/pharmacies/lebanon_pharmacies.json
+    - assets/doctors/lebanon_doctors.csv
