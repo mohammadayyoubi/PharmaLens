@@ -76,50 +76,34 @@ class Doctor {
   factory Doctor.fromMap(
       Map<String, dynamic> map,
       ) {
-    final rawName = _firstNonEmpty(
-      <dynamic>[
-        map['full_name'],
-        map['doctor_name'],
-        map['doctor name'],
-        map['physician_name'],
-        map['physician name'],
-        map['name'],
-      ],
+    final legacyFullName = _stringValue(
+      map['full_name'],
     );
 
-    var nameEn = _firstEnglishValue(
+    final nameEn = _firstEnglishValue(
       <dynamic>[
         map['full_name_en'],
         map['name_en'],
         map['doctor_name_en'],
-        rawName,
+        legacyFullName,
       ],
     );
 
-    var nameAr = _firstArabicValue(
+    final nameAr = _firstArabicValue(
       <dynamic>[
         map['full_name_ar'],
         map['name_ar'],
         map['doctor_name_ar'],
-        rawName,
+        legacyFullName,
       ],
     );
-
-    if (nameEn.isEmpty && nameAr.isEmpty && rawName.isNotEmpty) {
-      if (_isGoodArabicValue(rawName)) {
-        nameAr = rawName;
-      } else {
-        nameEn = rawName;
-      }
-    }
 
     final legacySpecialty = _firstNonEmpty(
       <dynamic>[
         map['main_specialty'],
         map['specialty'],
-        map['specialties'],
       ],
-    ).replaceAll(RegExp(r';+$'), '').trim();
+    );
 
     final specialtyEn = _firstEnglishValue(
       <dynamic>[
@@ -133,7 +117,6 @@ class Doctor {
       <dynamic>[
         map['specialty_ar'],
         map['specialty_arabic'],
-        legacySpecialty,
       ],
     );
 
@@ -148,13 +131,9 @@ class Doctor {
       map['clinic_name'],
     );
 
-    final hospitalName = _firstNonEmpty(
-      <dynamic>[
-        map['hospital_name'],
-        map['hospitals'],
-        map['hospital'],
-      ],
-    ).replaceAll(RegExp(r';+$'), '').trim();
+    final hospitalName = _stringValue(
+      map['hospital_name'],
+    );
 
     final hospitalClinic = _firstNonEmpty(
       <dynamic>[
@@ -186,23 +165,13 @@ class Doctor {
       ],
     );
 
-    final docId = _firstNonEmpty(
-      <dynamic>[
-        map['id'],
-        map['doctor_code'],
-        map['physician_code'],
-        map['physician code'],
-        map['generated_id'],
-      ],
-    );
-
     return Doctor(
-      id: docId.isNotEmpty ? docId : 'doc_id',
+      id: _stringValue(
+        map['id'],
+      ),
       doctorCode: _firstNonEmpty(
         <dynamic>[
           map['doctor_code'],
-          map['physician_code'],
-          map['physician code'],
           map['external_doctor_id'],
           map['external_id'],
           map['order_number'],
@@ -295,12 +264,10 @@ class Doctor {
       return nameEn.trim();
     }
 
-    /*
-     * Never intentionally place an Arabic doctor name
-     * in the main English doctor-name field.
-     *
-     * Active PharmaLanse records should have nameEn.
-     */
+    if (_isGoodArabicValue(nameAr)) {
+      return nameAr.trim();
+    }
+
     return 'Doctor';
   }
 

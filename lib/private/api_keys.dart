@@ -1,6 +1,6 @@
 class GeminiPrivateConfig {
   static const List<String> geminiApiKeys = [
-    'YOUR_GEMINI_API_KEY_HERE',
+    'AQ.Ab8RN6K4T47WRKGops6HEmHxzCV5dBZ26MRGq4TzEgjrZTg0uQ',
   ];
 
   static const List<String> geminiModels = [

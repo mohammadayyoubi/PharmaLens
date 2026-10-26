@@ -182,21 +182,29 @@ class MophMedicineService {
   // Public Search API
   // ---------------------------------------------------------------------------
 
-  /// Main search method across the MOPH medicine list.
+  /// Main search method across the MOPH medicine list with offset support.
   Future<List<MedicinePrice>> searchMedicines(
     String query, {
     int limit = 20,
+    int offset = 0,
     bool forceRefresh = false,
   }) async {
     await initialize();
 
+    final safeLimit = limit.clamp(1, 100);
+    final safeOffset = offset < 0 ? 0 : offset;
+
     final cleanedQuery = MedicineNormalizer.cleanUserQuery(query);
-    if (cleanedQuery.isEmpty) return const <MedicinePrice>[];
+    if (cleanedQuery.isEmpty) {
+      // Direct browse when query is empty: return catalog sliced by offset and limit
+      return getMedicinesPage(limit: safeLimit, offset: safeOffset);
+    }
 
     final normalizedQuery = MedicineNormalizer.normalizeText(cleanedQuery);
-    if (normalizedQuery.isEmpty) return const <MedicinePrice>[];
+    if (normalizedQuery.isEmpty) {
+      return getMedicinesPage(limit: safeLimit, offset: safeOffset);
+    }
 
-    final safeLimit = limit.clamp(1, 100);
     final scored = <_ScoredMedicine>[];
 
     for (final med in _catalog) {
@@ -208,11 +216,88 @@ class MophMedicineService {
 
     scored.sort((a, b) => b.score.compareTo(a.score));
 
-    final results = scored.take(safeLimit).map((item) {
+    final results = scored.skip(safeOffset).take(safeLimit).map((item) {
       return item.med.copyWith(similarityScore: item.score);
     }).toList();
 
     return List<MedicinePrice>.unmodifiable(results);
+  }
+
+  /// Returns paginated medicines directly from the catalog.
+  List<MedicinePrice> getMedicinesPage({int limit = 30, int offset = 0}) {
+    if (_catalog.isEmpty) return const <MedicinePrice>[];
+    final safeLimit = limit.clamp(1, 100);
+    final safeOffset = offset < 0 ? 0 : offset;
+    return List<MedicinePrice>.unmodifiable(_catalog.skip(safeOffset).take(safeLimit));
+  }
+
+  /// Read-only access to all loaded MOPH medicines.
+  List<MedicinePrice> get catalog => List<MedicinePrice>.unmodifiable(_catalog);
+
+  /// Finds medicines mentioned inside a natural language sentence or chatbot query.
+  Future<List<MedicinePrice>> extractMedicinesFromText(String text, {int limit = 5}) async {
+    await initialize();
+    if (text.trim().isEmpty || _catalog.isEmpty) return const <MedicinePrice>[];
+
+    final cleanText = MedicineNormalizer.cleanUserQuery(text).toLowerCase();
+    final words = cleanText.split(RegExp(r'\s+')).where((w) => w.length >= 3).toList();
+
+    final matched = <MedicinePrice>[];
+    final seen = <String>{};
+
+    // 1. Check if any catalog brand or primary brand token appears in user text
+    for (final med in _catalog) {
+      final brandLower = med.brandName.toLowerCase();
+      final primaryToken = brandLower.split(RegExp(r'[\s\-_/]+')).first;
+
+      if (primaryToken.length >= 3 && cleanText.contains(primaryToken)) {
+        if (seen.add(med.brandName.toLowerCase())) {
+          matched.add(med);
+          if (matched.length >= limit) break;
+        }
+      }
+    }
+
+    // 2. Generic name match (e.g. "paracetamol", "amoxicillin", "ibuprofen")
+    if (matched.length < limit) {
+      for (final med in _catalog) {
+        final generic = med.genericName?.toLowerCase();
+        if (generic != null && generic.length >= 3 && cleanText.contains(generic)) {
+          if (seen.add(med.brandName.toLowerCase())) {
+            matched.add(med);
+            if (matched.length >= limit) break;
+          }
+        }
+      }
+    }
+
+    // 3. Fallback: search individual non-stop words
+    if (matched.isEmpty) {
+      const stopWords = {
+        'what', 'is', 'the', 'price', 'of', 'does', 'side', 'effects',
+        'cost', 'how', 'much', 'for', 'tell', 'about', 'show', 'generic',
+        'alternative', 'alternatives', 'with', 'from', 'take', 'taking',
+        'have', 'give', 'good', 'best', 'safe', 'safety', 'available',
+        'lebanon', 'lbp', 'usd', 'who', 'when', 'where', 'why', 'can',
+        'سعر', 'كم', 'شو', 'ما', 'هو', 'ماهو', 'دواء', 'ادوية', 'علاج',
+        'اعراض', 'جانبية', 'بديل', 'بدائل', 'في', 'لبنان', 'ليرة', 'دولار'
+      };
+
+      for (final word in words) {
+        if (!stopWords.contains(word)) {
+          final wordMatches = await searchMedicines(word, limit: 3);
+          for (final wm in wordMatches) {
+            if (seen.add(wm.brandName.toLowerCase())) {
+              matched.add(wm);
+              if (matched.length >= limit) break;
+            }
+          }
+        }
+        if (matched.length >= limit) break;
+      }
+    }
+
+    return List<MedicinePrice>.unmodifiable(matched);
   }
 
   double _calculateMatchScore(MedicinePrice med, String normQuery, String rawQuery) {

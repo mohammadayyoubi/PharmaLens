@@ -4,6 +4,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../app/app_settings_scope.dart';
 import '../l10n/app_localizations.dart';
+import '../services/moph_medicine_service.dart';
 import '../theme/pharmalens_theme.dart';
 import '../widgets/chatbot_view.dart';
 
@@ -22,14 +23,19 @@ class SettingsScreen
 class _SettingsScreenState
     extends State<SettingsScreen> {
   static const String _whatsAppNumber =
-      '96176090271';
+      '96170080214';
 
   static const String
   _displayWhatsAppNumber =
-      '+961 76 090 271';
+      '+961 70 080 214';
+
+  static const String _developerTeam =
+      'TechWrap Development Team';
 
   static const String _appVersion =
       '1.0.0';
+
+  bool _isSyncingMoph = false;
 
   AppLocalizations get _l10n {
     return AppLocalizations.of(
@@ -113,6 +119,8 @@ class _SettingsScreenState
       context:
       context,
       useSafeArea:
+      true,
+      isScrollControlled:
       true,
       backgroundColor:
       Colors.transparent,
@@ -225,6 +233,8 @@ class _SettingsScreenState
       context:
       context,
       useSafeArea:
+      true,
+      isScrollControlled:
       true,
       backgroundColor:
       Colors.transparent,
@@ -560,9 +570,51 @@ class _SettingsScreenState
                   height: 10,
                 ),
 
+                const SizedBox(
+                  height: 10,
+                ),
+
                 _ValuePill(
                   value:
                   'v$_appVersion',
+                ),
+
+                const SizedBox(
+                  height: 14,
+                ),
+
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: palette.surfaceSoft,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: palette.border),
+                  ),
+                  child: Column(
+                    children: [
+                      Text(
+                        _text(
+                          en: 'Developed by $_developerTeam',
+                          ar: 'تم التطوير بواسطة فريق تطوير TechWrap',
+                        ),
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: palette.textPrimary,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        _displayWhatsAppNumber,
+                        style: const TextStyle(
+                          color: PharmaLensColors.teal,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
 
                 const SizedBox(
@@ -596,6 +648,48 @@ class _SettingsScreenState
         );
       },
     );
+  }
+
+  Future<void> _manualSyncMoph() async {
+    if (_isSyncingMoph) return;
+
+    setState(() {
+      _isSyncingMoph = true;
+    });
+
+    _showSafeMessage(
+      _text(
+        en: 'Checking MOPH Lebanon official dataset...',
+        ar: 'جارٍ التحقق من قاعدة بيانات وزارة الصحة العامة...',
+      ),
+    );
+
+    try {
+      final result = await MophMedicineService().checkAndUpdateIfStale(force: true);
+
+      if (!mounted) return;
+
+      setState(() {
+        _isSyncingMoph = false;
+      });
+
+      _showSafeMessage(
+        _isArabic ? 'تمت مزامنة بيانات وزارة الصحة بنجاح.' : result.message,
+      );
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        _isSyncingMoph = false;
+      });
+
+      _showSafeMessage(
+        _text(
+          en: 'Failed to sync with MOPH server. Using local dataset.',
+          ar: 'تعذرت المزامنة مع خادم الوزارة. يجري استخدام القاعدة المحلية.',
+        ),
+      );
+    }
   }
 
   void _showSafeMessage(
@@ -873,6 +967,55 @@ class _SettingsScreenState
                     title:
                     _text(
                       en:
+                      'Data & Sync',
+                      ar:
+                      'البيانات والمزامنة',
+                    ),
+                    children: [
+                      _SettingsTile(
+                        icon:
+                        Icons.sync_rounded,
+                        title:
+                        _text(
+                          en:
+                          'Sync MOPH Medicine Data',
+                          ar:
+                          'مزامنة بيانات أدوية وزارة الصحة',
+                        ),
+                        subtitle:
+                        _isSyncingMoph
+                            ? _text(
+                                en: 'Syncing in progress...',
+                                ar: 'جارٍ التحديث...',
+                              )
+                            : _text(
+                                en: 'Manual sync with official MOPH database',
+                                ar: 'مزامنة يدوية مع قاعدة بيانات وزارة الصحة',
+                              ),
+                        trailing: _isSyncingMoph
+                            ? const SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              )
+                            : Icon(
+                                Icons.refresh_rounded,
+                                color: PharmaLensColors.teal,
+                                size: 20,
+                              ),
+                        onTap: _isSyncingMoph ? null : _manualSyncMoph,
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(
+                    height: 20,
+                  ),
+
+                  _SettingsSection(
+                    title:
+                    _text(
+                      en:
                       'About',
                       ar:
                       'حول التطبيق',
@@ -892,9 +1035,9 @@ class _SettingsScreenState
                         subtitle:
                         _text(
                           en:
-                          'Version $_appVersion',
+                          'Version $_appVersion • $_developerTeam',
                           ar:
-                          'الإصدار $_appVersion',
+                          'الإصدار $_appVersion • فريق $_developerTeam',
                         ),
                         onTap:
                         _openAbout,
@@ -1569,31 +1712,42 @@ class _SettingsSheet
       context,
     );
 
-    return Container(
-      padding:
-      EdgeInsets.fromLTRB(
-        18,
-        10,
-        18,
-        22 +
-            MediaQuery.paddingOf(
-              context,
-            ).bottom,
-      ),
-      decoration:
-      BoxDecoration(
-        color:
-        palette.surface,
-        borderRadius:
-        const BorderRadius.vertical(
-          top:
-          Radius.circular(
-            26,
+    final maxHeight = MediaQuery.sizeOf(context).height * 0.88;
+
+    return SafeArea(
+      top: false,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxHeight: maxHeight,
+        ),
+        child: Container(
+          decoration:
+          BoxDecoration(
+            color:
+            palette.surface,
+            borderRadius:
+            const BorderRadius.vertical(
+              top:
+              Radius.circular(
+                26,
+              ),
+            ),
+          ),
+          child: SingleChildScrollView(
+            physics: const ClampingScrollPhysics(),
+            padding: EdgeInsets.fromLTRB(
+              18,
+              10,
+              18,
+              22 +
+                  MediaQuery.paddingOf(
+                    context,
+                  ).bottom,
+            ),
+            child: child,
           ),
         ),
       ),
-      child:
-      child,
     );
   }
 }

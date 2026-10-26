@@ -1,8 +1,8 @@
 class SupabasePrivateConfig {
   const SupabasePrivateConfig._();
 
-  static const String projectUrl = 'https://YOUR_SUPABASE_PROJECT_URL.supabase.co';
+  static const String projectUrl = 'https://wvedcwmuhinpswewgyfx.supabase.co';
 
   static const String publishableKey =
-      'YOUR_SUPABASE_PUBLISHABLE_KEY';
+      'sb_publishable_z64oL9QSqh-xrz6Zj6eF6Q_YZeCADUN';
 }

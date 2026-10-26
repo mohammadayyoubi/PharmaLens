@@ -8,6 +8,7 @@ import 'package:http/http.dart' as http;
 
 import '../models/chat_message.dart';
 import '../private/api_keys.dart';
+import 'medical_domain_guard_service.dart';
 import 'moph_medicine_service.dart';
 import 'nearby_healthcare_service.dart';
 
@@ -92,13 +93,33 @@ class ChatbotService {
 
       // 1. Gather local contextual evidence (Medicines & Pharmacies)
       final localMedContext = await _buildLocalMedicineContext(userText);
+      final catalogMatchFound = localMedContext.contains('MOPH Official Database');
+
+      // 2. Strict Medical Domain Guard (blocks programming, code, non-medical topics immediately)
+      final guardDecision = const MedicalDomainGuardService().evaluateText(
+        input: userText,
+        responseLanguage: isArabic ? 'Arabic' : 'English',
+        hasAttachedImage: imageBytes != null && imageBytes.isNotEmpty,
+        catalogMatchFound: catalogMatchFound,
+      );
+
+      if (!guardDecision.allowed) {
+        final botMsg = ChatMessage(
+          id: botMessageId,
+          sender: ChatMessageSender.bot,
+          text: guardDecision.userMessage,
+          sources: const ['PharmaLens Medical Domain Guard'],
+        );
+        _conversationHistory.add(botMsg);
+        return botMsg;
+      }
 
       final localPharmContext = await _buildLocalPharmacyContext(
         userText,
         langCode,
       );
 
-      // 2. Build multi-turn prompt payload for Gemini
+      // 3. Build multi-turn prompt payload for Gemini
       final sources = <String>[];
 
       if (localMedContext.contains('MOPH Official Database')) {
@@ -164,8 +185,12 @@ class ChatbotService {
       final mophService = MophMedicineService();
       await mophService.initialize();
 
-      // Extract candidate medicine names from user query
-      final matches = await mophService.searchMedicines(query, limit: 4);
+      // Extract candidate medicine names from user query (handles questions & sentences)
+      var matches = await mophService.extractMedicinesFromText(query, limit: 4);
+
+      if (matches.isEmpty) {
+        matches = await mophService.searchMedicines(query, limit: 4);
+      }
 
       if (matches.isEmpty) {
         return '';
@@ -338,6 +363,11 @@ YOUR CAPABILITIES & INSTRUCTIONS:
 
 5. SAFETY & MEDICAL RESPONSIBILITY:
    - Always encourage consulting a doctor or pharmacist for final prescription changes.
+
+6. STRICT DOMAIN RESTRICTION:
+   - You are exclusively a medical, pharmaceutical, and prescription AI assistant (PharmaLens).
+   - You MUST NEVER answer questions about programming languages (e.g., JavaScript, Python, C++, Dart, etc.), software engineering, sports, entertainment, politics, or general non-healthcare trivia.
+   - If the user asks anything outside medicine, healthcare, prescriptions, and pharmacy, politely decline to answer and remind them that PharmaLens is strictly dedicated to healthcare support.
 
 CONVERSATION CONTEXT & LOCAL DATASETS PROVIDED BELOW:
 $localMedicineContext

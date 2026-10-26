@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import '../models/medicine_price.dart';
 import '../screens/medicine_details_screen.dart';
 import '../services/moph_medicine_service.dart';
-import '../services/supabase_medicine_service.dart';
+
 import '../theme/pharmalens_theme.dart';
 import '../widgets/chatbot_view.dart';
 
@@ -36,14 +36,18 @@ class _MedicineSearchScreenState
 
   final FocusNode _searchFocusNode = FocusNode();
 
-  final SupabaseMedicineService _medicineService =
-  SupabaseMedicineService();
+
 
   List<MedicinePrice> _results =
   const <MedicinePrice>[];
 
   bool _isLoading = false;
+  bool _isLoadingMore = false;
+  bool _hasMore = false;
   bool _hasSearched = false;
+
+  final ScrollController _scrollController = ScrollController();
+  static const int _pageSize = 30;
 
   String _lastQuery = '';
   String? _errorMessage;
@@ -71,68 +75,88 @@ class _MedicineSearchScreenState
     final initialQuery =
     widget.initialQuery.trim();
 
-    if (initialQuery.isEmpty) {
-      return;
+    if (initialQuery.isNotEmpty) {
+      _searchController.text = initialQuery;
     }
 
-    _searchController.text =
-        initialQuery;
+    _scrollController.addListener(_onScroll);
 
     WidgetsBinding.instance.addPostFrameCallback(
-          (_) {
+      (_) {
         if (mounted) {
-          _search();
+          _search(reset: true);
         }
       },
     );
   }
 
+  void _onScroll() {
+    if (_scrollController.position.pixels >=
+        _scrollController.position.maxScrollExtent - 250) {
+      if (!_isLoading && !_isLoadingMore && _hasMore) {
+        _loadMore();
+      }
+    }
+  }
+
+  Future<void> _loadMore() async {
+    if (_isLoadingMore || !_hasMore) return;
+
+    final requestId = _searchRequestId;
+    final query = _searchController.text.trim();
+
+    setState(() {
+      _isLoadingMore = true;
+    });
+
+    try {
+      final moreResults = await MophMedicineService().searchMedicines(
+        query,
+        limit: _pageSize,
+        offset: _results.length,
+      );
+
+      if (!mounted || requestId != _searchRequestId) return;
+
+      setState(() {
+        _results = <MedicinePrice>[..._results, ...moreResults];
+        _hasMore = moreResults.length == _pageSize;
+        _isLoadingMore = false;
+      });
+    } catch (_) {
+      if (!mounted || requestId != _searchRequestId) return;
+      setState(() {
+        _isLoadingMore = false;
+      });
+    }
+  }
+
   Future<void> _search({
+    bool reset = true,
     bool forceRefresh = false,
   }) async {
     final query =
     _searchController.text.trim();
-
-    if (query.isEmpty) {
-      _searchFocusNode.requestFocus();
-
-      setState(() {
-        _results =
-        const <MedicinePrice>[];
-
-        _lastQuery = '';
-        _hasSearched = false;
-        _isLoading = false;
-
-        _errorMessage = _t(
-          en:
-          'Enter a medicine name to search.',
-          ar:
-          'أدخل اسم الدواء للبحث.',
-        );
-      });
-
-      return;
-    }
-
-    _searchFocusNode.unfocus();
 
     final requestId =
     ++_searchRequestId;
 
     setState(() {
       _isLoading = true;
+      _isLoadingMore = false;
       _hasSearched = true;
-
       _lastQuery = query;
-
       _errorMessage = null;
+      if (reset) {
+        _results = const <MedicinePrice>[];
+      }
     });
 
     try {
       final results = await MophMedicineService().searchMedicines(
         query,
-        limit: 40,
+        limit: _pageSize,
+        offset: 0,
         forceRefresh: forceRefresh,
       );
 
@@ -142,13 +166,19 @@ class _MedicineSearchScreenState
 
       setState(() {
         _results = List<MedicinePrice>.unmodifiable(results);
+        _hasMore = results.length == _pageSize;
         _isLoading = false;
 
         if (_results.isEmpty) {
-          _errorMessage = _t(
-            en: 'No matching medicines were found in the MOPH Lebanon database.',
-            ar: 'لم يتم العثور على أدوية مطابقة في قاعدة بيانات وزارة الصحة.',
-          );
+          _errorMessage = query.isEmpty
+              ? _t(
+                  en: 'No medicines found in the database.',
+                  ar: 'لم يتم العثور على أدوية في قاعدة البيانات.',
+                )
+              : _t(
+                  en: 'No matching medicines were found in the MOPH Lebanon database.',
+                  ar: 'لم يتم العثور على أدوية مطابقة في قاعدة بيانات وزارة الصحة.',
+                );
         }
       });
     } catch (error, stackTrace) {
@@ -164,6 +194,7 @@ class _MedicineSearchScreenState
 
       setState(() {
         _results = const <MedicinePrice>[];
+        _hasMore = false;
         _isLoading = false;
         _errorMessage = _t(
           en: 'Search service is temporarily unavailable.',
@@ -172,6 +203,8 @@ class _MedicineSearchScreenState
       });
     }
   }
+
+
 
   void _clearSearch() {
     ++_searchRequestId;
@@ -1028,11 +1061,13 @@ class _MedicineSearchScreenState
     return RefreshIndicator(
       onRefresh: () {
         return _search(
+          reset: true,
           forceRefresh: true,
         );
       },
       child:
       ListView.separated(
+        controller: _scrollController,
         physics:
         const AlwaysScrollableScrollPhysics(),
         padding:
@@ -1043,7 +1078,7 @@ class _MedicineSearchScreenState
           28,
         ),
         itemCount:
-        _results.length + 1,
+        _results.length + 1 + (_isLoadingMore ? 1 : 0),
         separatorBuilder: (
             context,
             index,
@@ -1073,6 +1108,19 @@ class _MedicineSearchScreenState
                   _results.length,
                   isArabic:
                   _isArabic,
+                ),
+              ),
+            );
+          }
+
+          if (index == _results.length + 1) {
+            return const Center(
+              child: Padding(
+                padding: EdgeInsets.symmetric(vertical: 16),
+                child: SizedBox(
+                  width: 26,
+                  height: 26,
+                  child: CircularProgressIndicator(strokeWidth: 2.5),
                 ),
               ),
             );
@@ -1125,6 +1173,8 @@ class _MedicineSearchScreenState
   void dispose() {
     ++_searchRequestId;
 
+    _scrollController.removeListener(_onScroll);
+    _scrollController.dispose();
     _searchController.dispose();
     _searchFocusNode.dispose();
 

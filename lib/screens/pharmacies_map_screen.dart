@@ -8,6 +8,7 @@ import '../models/nearby_healthcare_place.dart';
 import '../services/nearby_healthcare_service.dart';
 import '../theme/pharmalens_theme.dart';
 import '../widgets/chatbot_view.dart';
+import '../widgets/universal_map_view.dart';
 
 class PharmaciesMapScreen extends StatefulWidget {
   const PharmaciesMapScreen({
@@ -112,6 +113,7 @@ class _PharmaciesMapScreenState extends State<PharmaciesMapScreen> {
   NearbyHealthcareService();
 
   GoogleMapController? _mapController;
+  final UniversalMapController _universalMapController = UniversalMapController();
 
   Position? _userPosition;
 
@@ -172,16 +174,14 @@ class _PharmaciesMapScreenState extends State<PharmaciesMapScreen> {
       _lastLanguageCode =
           nextLanguage;
 
-      if (!kIsWeb) {
-        WidgetsBinding.instance
-            .addPostFrameCallback(
-              (_) {
-            if (mounted) {
-              _loadNearby();
-            }
-          },
-        );
-      }
+      WidgetsBinding.instance
+          .addPostFrameCallback(
+            (_) {
+          if (mounted) {
+            _loadNearby();
+          }
+        },
+      );
 
       return;
     }
@@ -191,16 +191,14 @@ class _PharmaciesMapScreenState extends State<PharmaciesMapScreen> {
       _lastLanguageCode =
           nextLanguage;
 
-      if (!kIsWeb) {
-        WidgetsBinding.instance
-            .addPostFrameCallback(
-              (_) {
-            if (mounted) {
-              _loadNearby();
-            }
-          },
-        );
-      }
+      WidgetsBinding.instance
+          .addPostFrameCallback(
+            (_) {
+          if (mounted) {
+            _loadNearby();
+          }
+        },
+      );
     }
   }
 
@@ -650,6 +648,12 @@ class _PharmaciesMapScreenState extends State<PharmaciesMapScreen> {
           );
     });
 
+    _universalMapController.animateTo(
+      place.latitude,
+      place.longitude,
+      zoom: 16,
+    );
+
     _mapController
         ?.animateCamera(
       CameraUpdate
@@ -681,14 +685,23 @@ class _PharmaciesMapScreenState extends State<PharmaciesMapScreen> {
   }
 
   Future<void> _moveToUser() async {
-    final controller =
-        _mapController;
-
     final position =
         _userPosition;
 
-    if (controller == null ||
-        position == null) {
+    if (position == null) {
+      return;
+    }
+
+    _universalMapController.animateTo(
+      position.latitude,
+      position.longitude,
+      zoom: 14.5,
+    );
+
+    final controller =
+        _mapController;
+
+    if (controller == null) {
       return;
     }
 
@@ -1338,6 +1351,46 @@ class _PharmaciesMapScreenState extends State<PharmaciesMapScreen> {
 
           _MapButton(
             heroTag:
+            'healthcare_zoom_in',
+            icon:
+            Icons.add_rounded,
+            foreground:
+            palette.textPrimary,
+            background:
+            palette.surface,
+            onPressed: () {
+              _universalMapController.zoomIn();
+              _mapController?.animateCamera(CameraUpdate.zoomIn());
+            },
+          ),
+
+          const SizedBox(
+            height:
+            9,
+          ),
+
+          _MapButton(
+            heroTag:
+            'healthcare_zoom_out',
+            icon:
+            Icons.remove_rounded,
+            foreground:
+            palette.textPrimary,
+            background:
+            palette.surface,
+            onPressed: () {
+              _universalMapController.zoomOut();
+              _mapController?.animateCamera(CameraUpdate.zoomOut());
+            },
+          ),
+
+          const SizedBox(
+            height:
+            9,
+          ),
+
+          _MapButton(
+            heroTag:
             'healthcare_refresh',
             icon:
             Icons.refresh_rounded,
@@ -1667,150 +1720,7 @@ class _PharmaciesMapScreenState extends State<PharmaciesMapScreen> {
     );
   }
 
-  Widget _buildWebUnavailableScreen() {
-    final palette =
-    PharmaLensTheme.paletteOf(
-      context,
-    );
 
-    return Scaffold(
-      backgroundColor:
-      palette.background,
-      body: DecoratedBox(
-        decoration:
-        BoxDecoration(
-          gradient:
-          palette.pageGradient,
-        ),
-        child: SafeArea(
-          child: Center(
-            child: ConstrainedBox(
-              constraints:
-              const BoxConstraints(
-                maxWidth:
-                520,
-              ),
-              child: Padding(
-                padding:
-                const EdgeInsets.all(
-                  24,
-                ),
-                child: Column(
-                  mainAxisSize:
-                  MainAxisSize.min,
-                  children: [
-                    Container(
-                      width:
-                      74,
-                      height:
-                      74,
-                      decoration:
-                      BoxDecoration(
-                        color:
-                        palette.tealSurface,
-                        borderRadius:
-                        BorderRadius.circular(
-                          23,
-                        ),
-                      ),
-                      child:
-                      const Icon(
-                        Icons
-                            .map_outlined,
-                        color:
-                        PharmaLensColors.teal,
-                        size:
-                        36,
-                      ),
-                    ),
-
-                    const SizedBox(
-                      height:
-                      18,
-                    ),
-
-                    Text(
-                      _text(
-                        en:
-                        'Healthcare map',
-                        ar:
-                        'خريطة الرعاية الصحية',
-                      ),
-                      textAlign:
-                      TextAlign.center,
-                      style:
-                      TextStyle(
-                        color:
-                        palette.textPrimary,
-                        fontSize:
-                        22,
-                        fontWeight:
-                        FontWeight.w900,
-                      ),
-                    ),
-
-                    const SizedBox(
-                      height:
-                      9,
-                    ),
-
-                    Text(
-                      _text(
-                        en:
-                        'Nearby healthcare map testing is currently enabled on Android. Web map support will be enabled separately after the Maps JavaScript configuration is secured.',
-                        ar:
-                        'اختبار خريطة خدمات الرعاية الصحية القريبة متاح حاليًا على Android. سيتم تفعيل دعم الويب بشكل منفصل بعد تأمين إعداد Maps JavaScript.',
-                      ),
-                      textAlign:
-                      TextAlign.center,
-                      style:
-                      TextStyle(
-                        color:
-                        palette.textSecondary,
-                        fontSize:
-                        13,
-                        height:
-                        1.55,
-                        fontWeight:
-                        FontWeight.w600,
-                      ),
-                    ),
-
-                    const SizedBox(
-                      height:
-                      18,
-                    ),
-
-                    FilledButton.icon(
-                      onPressed: () {
-                        Navigator.of(
-                          context,
-                        ).maybePop();
-                      },
-                      icon:
-                      const Icon(
-                        Icons
-                            .arrow_back_rounded,
-                      ),
-                      label:
-                      Text(
-                        _text(
-                          en:
-                          'Back',
-                          ar:
-                          'رجوع',
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
 
   @override
   void dispose() {
@@ -1827,10 +1737,6 @@ class _PharmaciesMapScreenState extends State<PharmaciesMapScreen> {
   Widget build(
       BuildContext context,
       ) {
-    if (kIsWeb) {
-      return _buildWebUnavailableScreen();
-    }
-
     final palette =
     PharmaLensTheme.paletteOf(
       context,
@@ -1852,73 +1758,104 @@ class _PharmaciesMapScreenState extends State<PharmaciesMapScreen> {
       userPosition.longitude,
     );
 
+    final isUniversal = kIsWeb ||
+        defaultTargetPlatform == TargetPlatform.windows ||
+        defaultTargetPlatform == TargetPlatform.linux ||
+        defaultTargetPlatform == TargetPlatform.macOS;
+
+    final initialCenter = MapCoordinates(
+      target.latitude,
+      target.longitude,
+    );
+
+    final userCoords = userPosition == null
+        ? null
+        : MapCoordinates(
+            userPosition.latitude,
+            userPosition.longitude,
+          );
+
     return Scaffold(
       backgroundColor: palette.background,
       floatingActionButton: const FloatingChatbotButton(),
       body: Stack(
         children: [
-          RepaintBoundary(
-            child: GoogleMap(
-              initialCameraPosition:
-              CameraPosition(
-                target:
-                target,
-                zoom:
-                userPosition ==
-                    null
-                    ? 10
-                    : 14.5,
+          if (isUniversal)
+            RepaintBoundary(
+              child: UniversalHealthcareMapView(
+                controller: _universalMapController,
+                initialCenter: initialCenter,
+                userLocation: userCoords,
+                places: _places,
+                selectedPlace: _selectedPlace,
+                initialZoom: userPosition == null ? 10.5 : 14.5,
+                onPlaceSelected: _selectPlace,
+                onMapTap: _clearSelectedPlace,
               ),
-              style:
-              isDark
-                  ? _mapStyleDark
-                  : _mapStyleLight,
-              markers:
-              _markers,
-              myLocationEnabled:
-              userPosition !=
-                  null,
-              myLocationButtonEnabled:
-              false,
-              mapType:
-              MapType.normal,
-              compassEnabled:
-              false,
-              mapToolbarEnabled:
-              false,
-              zoomControlsEnabled:
-              false,
-              trafficEnabled:
-              false,
-              buildingsEnabled:
-              false,
-              indoorViewEnabled:
-              false,
-              tiltGesturesEnabled:
-              false,
-              padding:
-              const EdgeInsets.only(
-                top:
-                100,
-                bottom:
-                275,
-              ),
-              onMapCreated:
-                  (
-                  controller,
-                  ) {
-                _mapController =
-                    controller;
+            )
+          else
+            RepaintBoundary(
+              child: GoogleMap(
+                initialCameraPosition:
+                CameraPosition(
+                  target:
+                  target,
+                  zoom:
+                  userPosition ==
+                      null
+                      ? 10
+                      : 14.5,
+                ),
+                style:
+                isDark
+                    ? _mapStyleDark
+                    : _mapStyleLight,
+                markers:
+                _markers,
+                myLocationEnabled:
+                userPosition !=
+                    null,
+                myLocationButtonEnabled:
+                false,
+                mapType:
+                MapType.normal,
+                compassEnabled:
+                false,
+                mapToolbarEnabled:
+                false,
+                zoomControlsEnabled:
+                false,
+                trafficEnabled:
+                false,
+                buildingsEnabled:
+                false,
+                indoorViewEnabled:
+                false,
+                tiltGesturesEnabled:
+                false,
+                padding:
+                const EdgeInsets.only(
+                  top:
+                  100,
+                  bottom:
+                  275,
+                ),
+                onMapCreated:
+                    (
+                    controller,
+                    ) {
+                  _mapController =
+                      controller;
 
-                _moveToUser();
-              },
-              onTap: (
-                  _,
-                  ) {
-                _clearSelectedPlace();
-              },
+                  _moveToUser();
+                },
+                onTap: (
+                    _,
+                    ) {
+                  _clearSelectedPlace();
+                },
+              ),
             ),
-          ),
 
           _buildHeader(),
 

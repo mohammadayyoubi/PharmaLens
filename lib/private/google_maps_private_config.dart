@@ -11,7 +11,7 @@ class GoogleMapsPrivateConfig {
    * لا تضع هنا مفتاح Maps SDK for Android.
    */
   static const String googlePlacesApiKey =
-      'PASTE_YOUR_NEW_PLACES_API_KEY_HERE';
+      'AIzaSyBBkVFm7zF4zc04d2A995ysOzjuruaUGac';
 
   /*
    * أسماء إضافية لدعم أي ملفات قديمة داخل المشروع
