@@ -50,4 +50,5 @@ flutter:
     - assets/medicines/medicines.csv
     - assets/medicines/medicine_details.json
     - assets/medicines/lebanon_medicine_prices.csv
+    - assets/medicines/lebanon_medicine_prices.json
     - assets/doctors/lebanon_doctors.csv

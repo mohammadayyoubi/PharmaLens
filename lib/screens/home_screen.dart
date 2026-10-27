@@ -766,8 +766,8 @@ class _DataStatusCard extends StatelessWidget {
     final body = failed
         ? (isArabic ? 'أعد تشغيل التطبيق. إذا استمرت المشكلة، أعد تثبيته.' : 'Restart the app. If it keeps happening, reinstall it.')
         : isArabic
-            ? 'لائحة ${moph.lastUpdatedDate} · ${formatCount(moph.totalMedicineCount)} دواء مسجل.${stale ? ' تحقق من السعر في الصيدلية.' : ''}'
-            : 'List of ${moph.lastUpdatedDate} · ${formatCount(moph.totalMedicineCount)} registered medicines.${stale ? ' Confirm the price at the pharmacy.' : ''}';
+            ? 'لائحة ${moph.publishedDate} · ${formatCount(moph.totalMedicineCount)} دواء مسجل.${stale ? ' تحقق من السعر في الصيدلية.' : ''}'
+            : 'List of ${moph.publishedDate} · ${formatCount(moph.totalMedicineCount)} registered medicines.${stale ? ' Confirm the price at the pharmacy.' : ''}';
 
     return Container(
       padding: const EdgeInsets.all(16),

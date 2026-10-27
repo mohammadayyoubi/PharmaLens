@@ -1,8 +1,12 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart' show rootBundle;
+import 'package:flutter/widgets.dart' show AppLifecycleListener;
 import 'package:http/http.dart' as http;
+import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:string_similarity/string_similarity.dart';
 
@@ -10,6 +14,7 @@ import '../models/medicine_price.dart';
 import '../utils/formatters.dart';
 import '../utils/medicine_equivalence.dart';
 import '../utils/medicine_normalizer.dart';
+import 'connectivity_service.dart';
 
 class MophMedicineService {
   MophMedicineService._internal();
@@ -18,21 +23,30 @@ class MophMedicineService {
 
   factory MophMedicineService() => _instance;
 
-  static const String _storageKeyMophCsv = 'moph_custom_medicine_csv';
+  /// Lists downloaded before the manifest existed; removed on startup.
+  static const String _legacyStorageKeyCsv = 'moph_custom_medicine_csv';
+  static const String _storageKeyManifest = 'moph_dataset_manifest_v2';
+  static const String _storageKeyWebCsv = 'moph_dataset_csv_v2';
   static const String _storageKeyLastCheck = 'moph_last_check_timestamp';
   static const String _assetCsvPath = 'assets/medicines/lebanon_medicine_prices.csv';
+  static const String _assetManifestPath = 'assets/medicines/lebanon_medicine_prices.json';
+  static const String _fileName = 'lebanon_medicine_prices.csv';
 
   /// MOPH Official Public Price List URL
   static const String mophPublicUrl = 'https://www.moph.gov.lb/en/Pages/3/3101/drugs-public-price-list';
 
-  /// Where a newer copy of the dataset is published. MOPH only offers an XLS,
-  /// so this points at a CSV built with tools/build_medicine_dataset.py and
-  /// hosted by the project (any static file host). Empty means updates ship
-  /// with app releases only.
-  static const String remoteDatasetUrl = String.fromEnvironment('MOPH_DATASET_URL');
+  /// Folder URL where the GitHub workflow (.github/workflows/update-moph-prices.yml)
+  /// publishes lebanon_medicine_prices.csv and its .json manifest every time
+  /// MOPH releases a new sheet. Override with
+  /// --dart-define=MOPH_DATA_BASE_URL=...; an empty value turns updates off.
+  static const String dataBaseUrl = String.fromEnvironment(
+    'MOPH_DATA_BASE_URL',
+    defaultValue: 'https://raw.githubusercontent.com/mohammadayyoubi/PharmaLens/main/assets/medicines/',
+  );
 
-  /// Auto-check interval for new MOPH release (6 hours)
-  static const Duration checkInterval = Duration(hours: 6);
+  /// How often the app asks whether a new list was published. Only the small
+  /// manifest is downloaded unless it changed, so this can be frequent.
+  static const Duration checkInterval = Duration(hours: 1);
 
   /// After this many days without a new list, prices are flagged as possibly outdated.
   static const int staleAfterDays = 60;
@@ -41,8 +55,16 @@ class MophMedicineService {
   bool _isInitialized = false;
   Completer<void>? _initCompleter;
   String _lastUpdatedDate = '';
+  MophDatasetManifest _manifest = const MophDatasetManifest();
   DateTime? _lastCheckTime;
   String? _loadError;
+  Future<MophSyncResult>? _checkInFlight;
+  bool _autoUpdatesStarted = false;
+  AppLifecycleListener? _lifecycleListener;
+
+  /// Increases whenever a newer list replaces the one in memory, so screens
+  /// showing the list date or prices can rebuild.
+  final ValueNotifier<int> datasetRevision = ValueNotifier<int>(0);
 
   bool get isInitialized => _isInitialized;
   int get totalMedicineCount => _catalog.length;
@@ -50,13 +72,17 @@ class MophMedicineService {
   /// Date of the official MOPH price list currently loaded (yyyy-MM-dd), or empty.
   String get lastUpdatedDate => _lastUpdatedDate;
   DateTime? get lastCheckTime => _lastCheckTime;
-  bool get canCheckForUpdates => remoteDatasetUrl.trim().isNotEmpty;
+  bool get canCheckForUpdates => dataBaseUrl.trim().isNotEmpty;
+
+  /// Day MOPH published the sheet in use; later than [lastUpdatedDate] when
+  /// MOPH re-issued a list with corrections.
+  String get publishedDate => _manifest.published.isNotEmpty ? _manifest.published : _lastUpdatedDate;
 
   /// Non-null when the bundled dataset could not be loaded.
   String? get loadError => _loadError;
 
   int? get dataAgeInDays {
-    final date = DateTime.tryParse(_lastUpdatedDate);
+    final date = DateTime.tryParse(publishedDate);
     if (date == null) return null;
     return DateTime.now().difference(date).inDays;
   }
@@ -76,19 +102,22 @@ class MophMedicineService {
     try {
       final assetCsv = await rootBundle.loadString(_assetCsvPath);
       var dataset = await compute(parseMophDataset, assetCsv);
+      var manifest = await _bundledManifest(dataset);
 
       // A list downloaded earlier is used only when it is newer than the one
       // shipped with this app version.
       try {
-        final prefs = await SharedPreferences.getInstance();
-        final customCsv = prefs.getString(_storageKeyMophCsv);
-        if (customCsv != null && customCsv.trim().isNotEmpty) {
-          final synced = await compute(parseMophDataset, customCsv);
-          if (synced.medicines.isNotEmpty && synced.listDate.compareTo(dataset.listDate) > 0) {
+        final saved = await _readSavedManifest();
+        if (saved != null && saved.isNewerThan(manifest)) {
+          final csv = await _readSavedCsv();
+          final synced = csv == null ? null : await compute(parseMophDataset, csv);
+          if (synced != null && saved.matches(synced)) {
             dataset = synced;
-          } else {
-            await prefs.remove(_storageKeyMophCsv);
+            manifest = saved;
           }
+        } else if (saved != null) {
+          // The app update shipped this list or a newer one.
+          await _clearSavedDataset();
         }
       } catch (e) {
         debugPrint('MophMedicineService: ignoring saved dataset: $e');
@@ -96,8 +125,9 @@ class MophMedicineService {
 
       _catalog = dataset.medicines;
       _lastUpdatedDate = dataset.listDate;
+      _manifest = manifest;
       _loadError = _catalog.isEmpty ? 'The bundled medicine list is empty.' : null;
-      debugPrint('MophMedicineService: Indexed ${_catalog.length} MOPH medicines (list date $_lastUpdatedDate).');
+      debugPrint('MophMedicineService: Indexed ${_catalog.length} MOPH medicines (list ${manifest.version}).');
     } catch (e, st) {
       debugPrint('MophMedicineService initialization error: $e\n$st');
       _catalog = <MedicinePrice>[];
@@ -106,10 +136,16 @@ class MophMedicineService {
 
     _isInitialized = true;
     _initCompleter!.complete();
+  }
 
-    if (canCheckForUpdates) {
-      unawaited(_autoCheckOnStartup());
+  Future<MophDatasetManifest> _bundledManifest(MophDataset dataset) async {
+    try {
+      final parsed = MophDatasetManifest.tryParse(await rootBundle.loadString(_assetManifestPath));
+      if (parsed != null) return parsed;
+    } catch (_) {
+      // Older builds have no manifest asset.
     }
+    return MophDatasetManifest(version: dataset.listDate, listDate: dataset.listDate, published: dataset.listDate);
   }
 
   // ---------------------------------------------------------------------------
@@ -393,110 +429,223 @@ class MophMedicineService {
   // Dataset updates
   // ---------------------------------------------------------------------------
 
-  /// Non-blocking startup auto-check for new MOPH dataset releases.
-  Future<void> _autoCheckOnStartup() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final lastCheckMs = prefs.getInt(_storageKeyLastCheck) ?? 0;
-      final nowMs = DateTime.now().millisecondsSinceEpoch;
+  /// Checks for a newer list now (if the last check is older than
+  /// [checkInterval]), whenever the device comes back online, and whenever the
+  /// app returns to the foreground. Call once after [initialize].
+  void startAutoUpdates() {
+    if (_autoUpdatesStarted || !canCheckForUpdates) return;
+    _autoUpdatesStarted = true;
 
-      if (nowMs - lastCheckMs < checkInterval.inMilliseconds) {
-        return;
-      }
+    unawaited(checkAndUpdateIfStale());
 
-      final result = await checkAndUpdateIfStale();
-      debugPrint('MophMedicineService auto-check result: ${result.status}');
-    } catch (e) {
-      debugPrint('MophMedicineService background auto-check error: $e');
-    }
+    final connectivity = ConnectivityService();
+    var wasOnline = connectivity.isOnline;
+    connectivity.addListener(() {
+      final online = connectivity.isOnline;
+      if (online && !wasOnline) unawaited(checkAndUpdateIfStale());
+      wasOnline = online;
+    });
+
+    _lifecycleListener = AppLifecycleListener(onResume: () => unawaited(checkAndUpdateIfStale()));
   }
 
-  /// Downloads [remoteDatasetUrl] and replaces the catalog when it holds a
-  /// newer official list. If [force] is false, checks are throttled to once
-  /// every [checkInterval].
-  Future<MophSyncResult> checkAndUpdateIfStale({bool force = false}) async {
+  /// Downloads the published manifest and, when it describes a newer list,
+  /// the list itself, then swaps it in. Unless [force] is set, the server is
+  /// asked at most once every [checkInterval].
+  Future<MophSyncResult> checkAndUpdateIfStale({bool force = false}) {
+    // Startup, reconnection and the Sync button can overlap; share one check.
+    return _checkInFlight ??= _check(force).whenComplete(() {
+      _checkInFlight = null;
+    });
+  }
+
+  Future<MophSyncResult> _check(bool force) async {
     await initialize();
 
-    if (!canCheckForUpdates) {
-      return MophSyncResult(
-        status: MophSyncStatus.notConfigured,
-        medicineCount: _catalog.length,
-        listDate: _lastUpdatedDate,
-      );
-    }
-
-    final prefs = await SharedPreferences.getInstance();
-    final nowMs = DateTime.now().millisecondsSinceEpoch;
-    _lastCheckTime = DateTime.fromMillisecondsSinceEpoch(nowMs);
-
-    if (!force) {
-      final lastCheckMs = prefs.getInt(_storageKeyLastCheck) ?? 0;
-      if (nowMs - lastCheckMs < checkInterval.inMilliseconds) {
-        return MophSyncResult(
-          status: MophSyncStatus.upToDate,
+    MophSyncResult result(MophSyncStatus status, [String detail = '']) => MophSyncResult(
+          status: status,
           medicineCount: _catalog.length,
           listDate: _lastUpdatedDate,
+          publishedDate: publishedDate,
+          detail: detail,
         );
+
+    if (!canCheckForUpdates) return result(MophSyncStatus.notConfigured);
+
+    final prefs = await SharedPreferences.getInstance();
+    final now = DateTime.now();
+    if (!force) {
+      final lastCheckMs = prefs.getInt(_storageKeyLastCheck) ?? 0;
+      if (now.millisecondsSinceEpoch - lastCheckMs < checkInterval.inMilliseconds) {
+        return result(MophSyncStatus.upToDate);
       }
     }
 
     try {
-      final response = await http.get(Uri.parse(remoteDatasetUrl)).timeout(const Duration(seconds: 20));
-      await prefs.setInt(_storageKeyLastCheck, nowMs);
-
-      if (response.statusCode != 200) {
-        return MophSyncResult(
-          status: MophSyncStatus.failed,
-          medicineCount: _catalog.length,
-          listDate: _lastUpdatedDate,
-          detail: 'HTTP ${response.statusCode}',
-        );
+      final base = dataBaseUrl.endsWith('/') ? dataBaseUrl : '$dataBaseUrl/';
+      final manifestResponse = await http.get(Uri.parse('${base}lebanon_medicine_prices.json')).timeout(const Duration(seconds: 15));
+      if (manifestResponse.statusCode != 200) {
+        return result(MophSyncStatus.failed, 'HTTP ${manifestResponse.statusCode}');
       }
 
-      final body = utf8.decode(response.bodyBytes);
+      _lastCheckTime = now;
+      await prefs.setInt(_storageKeyLastCheck, now.millisecondsSinceEpoch);
+
+      final remote = MophDatasetManifest.tryParse(utf8.decode(manifestResponse.bodyBytes));
+      if (remote == null) return result(MophSyncStatus.failed, 'The published manifest is not valid.');
+      if (!remote.isNewerThan(_manifest)) return result(MophSyncStatus.upToDate);
+
+      final csvResponse = await http.get(Uri.parse('${base}lebanon_medicine_prices.csv')).timeout(const Duration(seconds: 90));
+      if (csvResponse.statusCode != 200) {
+        return result(MophSyncStatus.failed, 'HTTP ${csvResponse.statusCode}');
+      }
+
+      final body = utf8.decode(csvResponse.bodyBytes);
       final dataset = await compute(parseMophDataset, body);
-
-      if (dataset.medicines.isEmpty) {
-        return MophSyncResult(
-          status: MophSyncStatus.failed,
-          medicineCount: _catalog.length,
-          listDate: _lastUpdatedDate,
-          detail: 'The downloaded file is not a valid medicine list.',
-        );
+      // A partial download or a file from another build must not replace a
+      // complete list.
+      if (!remote.matches(dataset)) {
+        return result(MophSyncStatus.failed, 'The downloaded list is incomplete.');
       }
 
-      if (dataset.listDate.compareTo(_lastUpdatedDate) <= 0) {
-        return MophSyncResult(
-          status: MophSyncStatus.upToDate,
-          medicineCount: _catalog.length,
-          listDate: _lastUpdatedDate,
-        );
-      }
-
-      await prefs.setString(_storageKeyMophCsv, body);
+      await _saveDataset(remote, body);
       _catalog = dataset.medicines;
       _lastUpdatedDate = dataset.listDate;
+      _manifest = remote;
       _loadError = null;
+      datasetRevision.value++;
+      debugPrint('MophMedicineService: updated to ${remote.version}.');
 
-      return MophSyncResult(
-        status: MophSyncStatus.updated,
-        medicineCount: _catalog.length,
-        listDate: _lastUpdatedDate,
-      );
+      return result(MophSyncStatus.updated);
     } catch (e) {
-      debugPrint('MophMedicineService release check network error: $e');
-      return MophSyncResult(
-        status: MophSyncStatus.failed,
-        medicineCount: _catalog.length,
-        listDate: _lastUpdatedDate,
-        detail: '$e',
-      );
+      debugPrint('MophMedicineService: update check failed: $e');
+      return result(MophSyncStatus.failed, '$e');
     }
   }
 
-  /// Forces a check of [remoteDatasetUrl] for a newer official list.
-  Future<MophSyncResult> updateFromMophWebsite() async {
+  /// Forces a check for a newer official list.
+  Future<MophSyncResult> updateFromMophWebsite() {
     return checkAndUpdateIfStale(force: true);
+  }
+
+  // Downloaded lists live in a file on phones and desktops; the web has no
+  // files, so it uses browser storage, which may refuse 3 MB (then the
+  // update lasts for the session only).
+
+  Future<File> _savedCsvFile() async {
+    final directory = await getApplicationSupportDirectory();
+    return File('${directory.path}${Platform.pathSeparator}$_fileName');
+  }
+
+  Future<MophDatasetManifest?> _readSavedManifest() async {
+    final prefs = await SharedPreferences.getInstance();
+    // Lists saved by older versions have no manifest to compare against.
+    if (prefs.containsKey(_legacyStorageKeyCsv)) await prefs.remove(_legacyStorageKeyCsv);
+    final raw = prefs.getString(_storageKeyManifest);
+    return raw == null ? null : MophDatasetManifest.tryParse(raw);
+  }
+
+  Future<String?> _readSavedCsv() async {
+    if (kIsWeb) {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getString(_storageKeyWebCsv);
+    }
+    final file = await _savedCsvFile();
+    return await file.exists() ? file.readAsString() : null;
+  }
+
+  Future<void> _saveDataset(MophDatasetManifest manifest, String csv) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (kIsWeb) {
+        await prefs.setString(_storageKeyWebCsv, csv);
+      } else {
+        final file = await _savedCsvFile();
+        await file.parent.create(recursive: true);
+        await file.writeAsString(csv, flush: true);
+      }
+      // Written last: a manifest is only ever saved next to a complete list.
+      await prefs.setString(_storageKeyManifest, manifest.toJsonString());
+    } catch (e) {
+      debugPrint('MophMedicineService: could not keep the new list offline: $e');
+    }
+  }
+
+  Future<void> _clearSavedDataset() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_storageKeyManifest);
+    if (kIsWeb) {
+      await prefs.remove(_storageKeyWebCsv);
+    } else {
+      final file = await _savedCsvFile();
+      if (await file.exists()) await file.delete();
+    }
+  }
+
+  @visibleForTesting
+  void stopAutoUpdates() {
+    _lifecycleListener?.dispose();
+    _lifecycleListener = null;
+    _autoUpdatesStarted = false;
+  }
+}
+
+/// lebanon_medicine_prices.json, written by tools/update_moph_dataset.py next
+/// to the CSV. Says which MOPH sheet the list was built from, so the app can
+/// tell a new list (or a corrected re-issue of the same list) from the one it
+/// has without downloading the CSV.
+class MophDatasetManifest {
+  const MophDatasetManifest({
+    this.version = '',
+    this.listDate = '',
+    this.published = '',
+    this.rows = 0,
+    this.generatedAt = '',
+  });
+
+  final String version;
+  final String listDate;
+
+  /// When MOPH published the sheet (a re-issue keeps [listDate]).
+  final String published;
+  final int rows;
+  final String generatedAt;
+
+  static MophDatasetManifest? tryParse(String raw) {
+    try {
+      final json = jsonDecode(raw);
+      if (json is! Map || '${json['version'] ?? ''}'.isEmpty) return null;
+      return MophDatasetManifest(
+        version: '${json['version']}',
+        listDate: '${json['list_date'] ?? ''}',
+        published: '${json['published'] ?? json['list_date'] ?? ''}',
+        rows: int.tryParse('${json['rows'] ?? 0}') ?? 0,
+        generatedAt: '${json['generated_at'] ?? ''}',
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  String toJsonString() => jsonEncode(<String, Object>{
+        'version': version,
+        'list_date': listDate,
+        'published': published,
+        'rows': rows,
+        'generated_at': generatedAt,
+      });
+
+  /// Later publication wins; for the same publication, a later rebuild.
+  bool isNewerThan(MophDatasetManifest other) {
+    final byDate = published.compareTo(other.published);
+    if (byDate != 0) return byDate > 0;
+    return version != other.version && generatedAt.compareTo(other.generatedAt) > 0;
+  }
+
+  /// Whether [dataset] is the complete list this manifest describes.
+  bool matches(MophDataset dataset) {
+    if (dataset.medicines.isEmpty) return false;
+    return rows == 0 || dataset.medicines.length == rows;
   }
 }
 
@@ -522,17 +671,24 @@ class MophSyncResult {
   final String listDate;
   final String detail;
 
+  /// Day MOPH published that list (later than [listDate] for a re-issue).
+  final String publishedDate;
+
   MophSyncResult({
     required this.status,
     required this.medicineCount,
     required this.listDate,
+    this.publishedDate = '',
     this.detail = '',
   });
 
   bool get success => status != MophSyncStatus.failed;
 
   String describe({required bool isArabic}) {
-    final date = listDate.isEmpty ? (isArabic ? 'غير معروف' : 'unknown') : listDate;
+    var date = listDate.isEmpty ? (isArabic ? 'غير معروف' : 'unknown') : listDate;
+    if (publishedDate.isNotEmpty && publishedDate != listDate) {
+      date = isArabic ? '$date، المعدّلة في $publishedDate' : '$date, revised $publishedDate';
+    }
 
     switch (status) {
       case MophSyncStatus.updated:

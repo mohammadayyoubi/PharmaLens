@@ -62,6 +62,8 @@ class _AppShellState extends State<AppShell> {
   void initState() {
     super.initState();
 
+    MophMedicineService().datasetRevision.addListener(_onPricesUpdated);
+
     // Web links such as /?tab=doctors open that section directly.
     if (kIsWeb) {
       final requested = Uri.base.queryParameters['tab'];
@@ -84,6 +86,28 @@ class _AppShellState extends State<AppShell> {
         });
       }
     }
+  }
+
+  @override
+  void dispose() {
+    MophMedicineService().datasetRevision.removeListener(_onPricesUpdated);
+    super.dispose();
+  }
+
+  /// A newer MOPH list arrived in the background (see MophMedicineService).
+  void _onPricesUpdated() {
+    if (!mounted) return;
+    final moph = MophMedicineService();
+    setState(() {});
+    ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+      SnackBar(
+        content: Text(
+          _isArabic
+              ? 'تم تحديث أسعار الأدوية إلى لائحة وزارة الصحة (${moph.publishedDate}).'
+              : 'Medicine prices updated to the latest MOPH list (${moph.publishedDate}).',
+        ),
+      ),
+    );
   }
 
   final Map<AppTab, GlobalKey<NavigatorState>> _navigatorKeys = {
@@ -424,8 +448,8 @@ class _Sidebar extends StatelessWidget {
                     Expanded(
                       child: Text(
                         isArabic
-                            ? 'لائحة وزارة الصحة ${moph.lastUpdatedDate}\n${formatCount(moph.totalMedicineCount)} دواء'
-                            : 'MOPH list ${moph.lastUpdatedDate}\n${formatCount(moph.totalMedicineCount)} medicines',
+                            ? 'لائحة وزارة الصحة ${moph.publishedDate}\n${formatCount(moph.totalMedicineCount)} دواء'
+                            : 'MOPH list ${moph.publishedDate}\n${formatCount(moph.totalMedicineCount)} medicines',
                         style: TextStyle(color: palette.textSecondary, fontSize: 11.5, height: 1.35, fontWeight: FontWeight.w700),
                       ),
                     ),

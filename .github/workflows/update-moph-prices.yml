@@ -1,0 +1,75 @@
+# Keeps the MOPH medicine price list current without manual downloads.
+#
+# Every 6 hours: look for a newer "Drugs Public Price List" sheet on the MOPH
+# website, rebuild assets/medicines/lebanon_medicine_prices.csv (+ .json
+# manifest) and commit it. Installed apps download the published copy when
+# they are online (see MophMedicineService), so prices change on phones
+# without an app release.
+#
+# Run it by hand from the Actions tab ("Run workflow"); tick "force" to
+# rebuild even when MOPH has not published a new sheet.
+
+name: Update MOPH medicine prices
+
+on:
+  schedule:
+    - cron: "17 */6 * * *"
+  workflow_dispatch:
+    inputs:
+      force:
+        description: Rebuild even if the MOPH sheet did not change
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: moph-prices
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install xlrd==2.0.2
+
+      - name: Check MOPH and rebuild the list
+        id: update
+        run: python tools/update_moph_dataset.py ${{ inputs.force && '--force' || '' }}
+
+      - name: Commit the new list
+        if: steps.update.outputs.changed == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add assets/medicines/lebanon_medicine_prices.csv assets/medicines/lebanon_medicine_prices.json
+          git commit -m "data: MOPH price list ${{ steps.update.outputs.version }}"
+          git push
+
+      # Optional: if this repository is private, the app cannot download from
+      # it. Set the repository variable DATA_REPO (e.g. "owner/PharmaLens-data",
+      # a public repo) and the secret DATA_REPO_TOKEN (a fine-grained token with
+      # "Contents: read and write" on that repo) to publish the files there.
+      - name: Publish to the public data repository
+        if: steps.update.outputs.changed == 'true' && vars.DATA_REPO != ''
+        env:
+          TOKEN: ${{ secrets.DATA_REPO_TOKEN }}
+          DATA_REPO: ${{ vars.DATA_REPO }}
+        run: |
+          git clone --depth 1 "https://x-access-token:${TOKEN}@github.com/${DATA_REPO}.git" data-repo
+          cp assets/medicines/lebanon_medicine_prices.csv assets/medicines/lebanon_medicine_prices.json data-repo/
+          cd data-repo
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add lebanon_medicine_prices.csv lebanon_medicine_prices.json
+          git commit -m "MOPH price list ${{ steps.update.outputs.version }}" || exit 0
+          git push

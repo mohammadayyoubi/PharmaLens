@@ -26,6 +26,8 @@ Future<void> main() async {
   ]);
 
   unawaited(ConnectivityService().start());
+  // New MOPH lists are published by .github/workflows/update-moph-prices.yml.
+  MophMedicineService().startAutoUpdates();
   unawaited(PrescriptionHistoryService().load());
   unawaited(HealthProfileService().load());
   unawaited(ReminderService().load());

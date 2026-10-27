@@ -992,8 +992,8 @@ class _SettingsScreenState
                                 ar: 'جارٍ التحديث...',
                               )
                             : _text(
-                                en: 'MOPH list of ${MophMedicineService().lastUpdatedDate} · ${formatCount(MophMedicineService().totalMedicineCount)} medicines',
-                                ar: 'لائحة وزارة الصحة بتاريخ ${MophMedicineService().lastUpdatedDate} · ${formatCount(MophMedicineService().totalMedicineCount)} دواء',
+                                en: 'MOPH list of ${MophMedicineService().publishedDate} · ${formatCount(MophMedicineService().totalMedicineCount)} medicines',
+                                ar: 'لائحة وزارة الصحة بتاريخ ${MophMedicineService().publishedDate} · ${formatCount(MophMedicineService().totalMedicineCount)} دواء',
                               ),
                         trailing: _isSyncingMoph
                             ? const SizedBox(
