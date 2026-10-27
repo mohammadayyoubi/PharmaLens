@@ -2,12 +2,11 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
-import 'package:flutter/services.dart' show rootBundle;
 import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
 
 import '../models/chat_message.dart';
-import '../private/api_keys.dart';
+import 'gemini_client.dart';
 import 'medical_domain_guard_service.dart';
 import 'moph_medicine_service.dart';
 import 'nearby_healthcare_service.dart';
@@ -42,27 +41,9 @@ class ChatbotService {
     );
   }
 
-  List<String> _getApiKeys() {
-    final keys = <String>[];
-    keys.addAll(
-      GeminiPrivateConfig.geminiApiKeys
-          .map((k) => k.trim())
-          .where((k) => k.isNotEmpty)
-          .where((k) =>
-              k != 'PASTE_YOUR_NEW_GEMINI_API_KEY_HERE' &&
-              k != 'PASTE_YOUR_GEMINI_KEY_HERE' &&
-              k != 'YOUR_API_KEY_HERE'),
-    );
-    return keys.toSet().toList();
-  }
+  List<String> _getApiKeys() => GeminiClient.apiKeys;
 
-  List<String> _getModels() {
-    return GeminiPrivateConfig.geminiModels
-        .map((m) => m.trim())
-        .where((m) => m.isNotEmpty)
-        .toSet()
-        .toList();
-  }
+  List<String> _getModels() => GeminiClient.models;
 
   /// Sends user message (with optional attached image) and generates an AI response.
   Future<ChatMessage> sendMessage({
@@ -250,25 +231,6 @@ class ChatbotService {
 
     final sb = StringBuffer('=== LOCAL PHARMACIES DATASET CONTEXT ===\n');
 
-    try {
-      // Load offline json pharmacies
-      final jsonString = await rootBundle.loadString('assets/pharmacies/lebanon_pharmacies.json');
-      final List<dynamic> jsonList = jsonDecode(jsonString);
-
-      if (jsonList.isNotEmpty) {
-        sb.writeln('Offline Local Registered Pharmacies in Lebanon:');
-        for (final item in jsonList.take(5)) {
-          if (item is Map) {
-            final name = item['name'] ?? 'Pharmacy';
-            final area = item['area'] ?? item['address'] ?? 'Lebanon';
-            final phone = item['phone'] ?? item['whatsapp'] ?? 'Contact on site';
-            sb.writeln('• $name - Area: $area | Phone: $phone');
-          }
-        }
-        sb.writeln();
-      }
-    } catch (_) {}
-
     // Try fetching device location nearby pharmacies
     try {
       final service = NearbyHealthcareService();
@@ -296,7 +258,9 @@ class ChatbotService {
       );
 
       if (places.isNotEmpty) {
-        sb.writeln('Live Nearby Pharmacies (Distance sorted):');
+        sb.writeln(position != null
+            ? 'Live Nearby Pharmacies (Distance sorted):'
+            : 'Pharmacies near central Beirut (the user\'s location is unavailable; say so):');
 
         for (final place in places) {
           final openText = place.openNow == true
@@ -449,11 +413,11 @@ $localPharmacyContext
                 },
                 body: jsonEncode(<String, dynamic>{
                   'contents': contents,
-                  'generationConfig': <String, dynamic>{
-                    'temperature': 0.2,
-                    'candidateCount': 1,
-                    'maxOutputTokens': 2500,
-                  },
+                  'generationConfig': GeminiClient.generationConfig(
+                    model: cleanModel,
+                    maxOutputTokens: 4096,
+                    legacyTemperature: 0.2,
+                  ),
                 }),
               )
               .timeout(_requestTimeout);

@@ -403,6 +403,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'PharmaLens provides informational support and does not replace a doctor or pharmacist.'**
   String get medicalDisclaimer;
+
+  /// No description provided for @prescriptionAnalysis.
+  ///
+  /// In en, this message translates to:
+  /// **'Prescription analysis'**
+  String get prescriptionAnalysis;
+
+  /// No description provided for @tryAgain.
+  ///
+  /// In en, this message translates to:
+  /// **'Try again'**
+  String get tryAgain;
 }
 
 class _AppLocalizationsDelegate

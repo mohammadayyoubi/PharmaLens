@@ -242,9 +242,11 @@ class _MedicineSearchScreenState
 
     if (!mounted) return;
 
+    final message = result.describe(isArabic: _isArabic);
+
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(result.message),
+        content: Text(message),
         backgroundColor: result.success ? PharmaLensColors.teal : PharmaLensColors.danger,
       ),
     );
@@ -569,7 +571,7 @@ class _MedicineSearchScreenState
         child: ConstrainedBox(
           constraints:
           const BoxConstraints(
-            maxWidth: 820,
+            maxWidth: 1180,
           ),
           child: Column(
             crossAxisAlignment:
@@ -1058,114 +1060,146 @@ class _MedicineSearchScreenState
       );
     }
 
-    return RefreshIndicator(
-      onRefresh: () {
-        return _search(
-          reset: true,
-          forceRefresh: true,
-        );
-      },
-      child:
-      ListView.separated(
-        controller: _scrollController,
-        physics:
-        const AlwaysScrollableScrollPhysics(),
-        padding:
-        const EdgeInsets.fromLTRB(
-          16,
-          16,
-          16,
-          28,
-        ),
-        itemCount:
-        _results.length + 1 + (_isLoadingMore ? 1 : 0),
-        separatorBuilder: (
-            context,
-            index,
-            ) {
-          return SizedBox(
-            height:
-            index == 0 ? 12 : 14,
-          );
-        },
-        itemBuilder: (
-            context,
-            index,
-            ) {
-          if (index == 0) {
-            return Center(
-              child:
-              ConstrainedBox(
-                constraints:
-                const BoxConstraints(
-                  maxWidth: 820,
-                ),
-                child:
-                _ResultsSummary(
-                  query:
-                  _lastQuery,
-                  resultCount:
-                  _results.length,
-                  isArabic:
-                  _isArabic,
-                ),
-              ),
-            );
-          }
+    return LayoutBuilder(
+      builder: (
+          context,
+          constraints,
+          ) {
+        final columns =
+        constraints.maxWidth >= 1000 ? 2 : 1;
 
-          if (index == _results.length + 1) {
-            return const Center(
-              child: Padding(
-                padding: EdgeInsets.symmetric(vertical: 16),
-                child: SizedBox(
-                  width: 26,
-                  height: 26,
-                  child: CircularProgressIndicator(strokeWidth: 2.5),
-                ),
-              ),
-            );
-          }
+        final rowCount =
+            (_results.length + columns - 1) ~/ columns;
 
-          final resultIndex =
-              index - 1;
-
+        Widget card(int resultIndex) {
           final medicine =
           _results[resultIndex];
 
-          return Center(
-            child: ConstrainedBox(
-              constraints:
-              const BoxConstraints(
-                maxWidth: 820,
-              ),
-              child:
-              _MedicineCard(
-                medicine:
+          return _MedicineCard(
+            medicine:
+            medicine,
+            resultNumber:
+            resultIndex + 1,
+            selectionMode:
+            widget.selectionMode,
+            isArabic:
+            _isArabic,
+            onOpenDetails: () {
+              _openMedicineDetails(
                 medicine,
-                resultNumber:
-                resultIndex + 1,
-                selectionMode:
-                widget.selectionMode,
-                isArabic:
-                _isArabic,
-                onOpenDetails: () {
-                  _openMedicineDetails(
-                    medicine,
-                  );
-                },
-                onSelect:
-                widget.selectionMode
-                    ? () {
-                  _selectMedicine(
-                    medicine,
-                  );
-                }
-                    : null,
-              ),
-            ),
+              );
+            },
+            onSelect:
+            widget.selectionMode
+                ? () {
+              _selectMedicine(
+                medicine,
+              );
+            }
+                : null,
           );
-        },
-      ),
+        }
+
+        return RefreshIndicator(
+          onRefresh: () {
+            return _search(
+              reset: true,
+              forceRefresh: true,
+            );
+          },
+          child:
+          ListView.separated(
+            controller: _scrollController,
+            physics:
+            const AlwaysScrollableScrollPhysics(),
+            padding:
+            const EdgeInsets.fromLTRB(
+              16,
+              16,
+              16,
+              96,
+            ),
+            itemCount:
+            rowCount + 1 + (_isLoadingMore ? 1 : 0),
+            separatorBuilder: (
+                context,
+                index,
+                ) {
+              return SizedBox(
+                height:
+                index == 0 ? 12 : 14,
+              );
+            },
+            itemBuilder: (
+                context,
+                index,
+                ) {
+              if (index == 0) {
+                return Center(
+                  child:
+                  ConstrainedBox(
+                    constraints:
+                    const BoxConstraints(
+                      maxWidth: 1180,
+                    ),
+                    child:
+                    _ResultsSummary(
+                      query:
+                      _lastQuery,
+                      resultCount:
+                      _results.length,
+                      isArabic:
+                      _isArabic,
+                    ),
+                  ),
+                );
+              }
+
+              if (index == rowCount + 1) {
+                return const Center(
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(vertical: 16),
+                    child: SizedBox(
+                      width: 26,
+                      height: 26,
+                      child: CircularProgressIndicator(strokeWidth: 2.5),
+                    ),
+                  ),
+                );
+              }
+
+              final first =
+                  (index - 1) * columns;
+
+              return Center(
+                child: ConstrainedBox(
+                  constraints:
+                  BoxConstraints(
+                    maxWidth: columns == 1 ? 820 : 1180,
+                  ),
+                  child: columns == 1
+                      ? card(first)
+                      : Row(
+                      crossAxisAlignment:
+                      CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: card(first),
+                        ),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: first + 1 < _results.length
+                              ? card(first + 1)
+                              : const SizedBox.shrink(),
+                        ),
+                      ],
+                    ),
+                ),
+              );
+            },
+          ),
+        );
+      },
     );
   }
 

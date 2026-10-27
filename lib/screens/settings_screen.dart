@@ -6,6 +6,7 @@ import '../app/app_settings_scope.dart';
 import '../l10n/app_localizations.dart';
 import '../services/moph_medicine_service.dart';
 import '../theme/pharmalens_theme.dart';
+import '../utils/formatters.dart';
 import '../widgets/chatbot_view.dart';
 
 class SettingsScreen
@@ -674,7 +675,9 @@ class _SettingsScreenState
       });
 
       _showSafeMessage(
-        _isArabic ? 'تمت مزامنة بيانات وزارة الصحة بنجاح.' : result.message,
+        result.describe(
+          isArabic: _isArabic,
+        ),
       );
     } catch (e) {
       if (!mounted) return;
@@ -989,8 +992,8 @@ class _SettingsScreenState
                                 ar: 'جارٍ التحديث...',
                               )
                             : _text(
-                                en: 'Manual sync with official MOPH database',
-                                ar: 'مزامنة يدوية مع قاعدة بيانات وزارة الصحة',
+                                en: 'MOPH list of ${MophMedicineService().lastUpdatedDate} · ${formatCount(MophMedicineService().totalMedicineCount)} medicines',
+                                ar: 'لائحة وزارة الصحة بتاريخ ${MophMedicineService().lastUpdatedDate} · ${formatCount(MophMedicineService().totalMedicineCount)} دواء',
                               ),
                         trailing: _isSyncingMoph
                             ? const SizedBox(
@@ -1065,8 +1068,14 @@ class _SettingsScreenState
       context,
     );
 
+    final canPop =
+    Navigator.of(
+      context,
+    ).canPop();
+
     return Row(
       children: [
+        if (canPop)
         Material(
           color:
           palette.surface,
@@ -1108,15 +1117,7 @@ class _SettingsScreenState
               ),
               child:
               Icon(
-                Directionality.of(
-                  context,
-                ) ==
-                    TextDirection
-                        .rtl
-                    ? Icons
-                    .arrow_forward_rounded
-                    : Icons
-                    .arrow_back_rounded,
+                Icons.arrow_back_rounded,
                 color:
                 palette
                     .textPrimary,
@@ -1127,6 +1128,7 @@ class _SettingsScreenState
           ),
         ),
 
+        if (canPop)
         const SizedBox(
           width: 13,
         ),
@@ -1674,15 +1676,7 @@ class _SettingsTile
 
               trailing ??
                   Icon(
-                    Directionality.of(
-                      context,
-                    ) ==
-                        TextDirection
-                            .rtl
-                        ? Icons
-                        .chevron_left_rounded
-                        : Icons
-                        .chevron_right_rounded,
+                    Icons.chevron_right_rounded,
                     color:
                     palette
                         .textMuted,

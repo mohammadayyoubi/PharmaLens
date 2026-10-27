@@ -1,12 +1,9 @@
 import 'package:flutter/foundation.dart';
 
 import '../models/ai_handwriting_result.dart';
-import '../models/medicine_knowledge.dart';
 import '../models/medicine_price.dart';
 import '../models/verified_medicine_result.dart';
-import 'medicine_knowledge_service.dart';
 import 'moph_medicine_service.dart';
-import 'supabase_medicine_service.dart';
 
 /// Safety-first prescription medicine verification.
 ///
@@ -21,14 +18,7 @@ import 'supabase_medicine_service.dart';
 /// Partial names such as "Dexa" may produce POSSIBLE candidates, but are never
 /// promoted automatically to a confirmed product.
 class MedicineVerificationService {
-  MedicineVerificationService({
-    SupabaseMedicineService? medicineService,
-    MedicineKnowledgeService? knowledgeService,
-  }) : _medicineService = medicineService ?? SupabaseMedicineService(),
-       _knowledgeService = knowledgeService ?? MedicineKnowledgeService();
-
-  final SupabaseMedicineService _medicineService;
-  final MedicineKnowledgeService _knowledgeService;
+  MedicineVerificationService();
 
   static const double _minimumPossibleScore = 0.46;
   static const double _ambiguityScoreDifference = 0.10;
@@ -142,23 +132,15 @@ class MedicineVerificationService {
         );
       }
 
-      final knowledgeResult = await _loadKnowledgeSafely(best.medicine);
-
       return VerifiedMedicineResult(
         suggestion: suggestion,
         status: MedicineVerificationStatus.verified,
         candidate: best.medicine,
-        knowledge: knowledgeResult.knowledge,
+        knowledge: null,
         verificationScore: best.score,
         candidateCount: plausible.length,
-        message: knowledgeResult.knowledge == null
-            ? 'Medicine identity verified. Reviewed medicine information is not available yet.${knowledgeResult.messageSuffix}'
-            : 'Medicine identity and reviewed medicine information verified.',
+        message: 'Medicine identity verified against the MOPH list.',
       );
-    } on SupabaseMedicineException catch (error, stackTrace) {
-      _debugLog('Medicine database verification failed.', error, stackTrace);
-
-      return _failedResult(suggestion);
     } catch (error, stackTrace) {
       _debugLog('Unexpected medicine verification failure.', error, stackTrace);
 
@@ -184,18 +166,15 @@ class MedicineVerificationService {
       );
     }
 
-    final knowledgeResult = await _loadKnowledgeSafely(selectedMedicine);
-
     return VerifiedMedicineResult(
       suggestion: suggestion,
       status: MedicineVerificationStatus.possible,
       candidate: selectedMedicine,
-      knowledge: knowledgeResult.knowledge,
+      knowledge: null,
       verificationScore: 0,
       candidateCount: 1,
-      message: knowledgeResult.knowledge == null
-          ? 'Medicine selected manually. The product identity is known, but the prescription match remains unverified.${knowledgeResult.messageSuffix}'
-          : 'Medicine selected manually. The reviewed profile belongs to the selected product, but the prescription match remains unverified.',
+      message:
+          'Medicine selected manually. The product identity is known, but the prescription match remains unverified.',
       selectionSource: MedicineSelectionSource.manual,
     );
   }
@@ -955,100 +934,6 @@ class MedicineVerificationService {
     return 'A possible prescription match was found. Professional confirmation is required.';
   }
 
-  Future<_KnowledgeLoadResult> _loadKnowledgeSafely(
-    MedicinePrice medicine, {
-    bool forceRefresh = false,
-  }) async {
-    try {
-      final knowledge = await _knowledgeService.findForMedicine(
-        medicine,
-        forceRefresh: forceRefresh,
-      );
-
-      if (knowledge == null) {
-        return const _KnowledgeLoadResult(
-          knowledge: null,
-          messageSuffix:
-              ' Reviewed medicine information has not been added yet.',
-        );
-      }
-
-      if (!knowledge.canBeDisplayedAsReviewed) {
-        return const _KnowledgeLoadResult(
-          knowledge: null,
-          messageSuffix: ' A reviewed clinical profile is not available yet.',
-        );
-      }
-
-      if (!_knowledgeMatchesMedicine(medicine, knowledge)) {
-        return const _KnowledgeLoadResult(
-          knowledge: null,
-          messageSuffix:
-              ' A matching reviewed clinical profile is not available yet.',
-        );
-      }
-
-      return _KnowledgeLoadResult(knowledge: knowledge, messageSuffix: '');
-    } on MedicineKnowledgeException catch (error, stackTrace) {
-      _debugLog('Medicine knowledge loading failed.', error, stackTrace);
-
-      return const _KnowledgeLoadResult(
-        knowledge: null,
-        messageSuffix: ' Reviewed medicine information could not be loaded.',
-      );
-    } catch (error, stackTrace) {
-      _debugLog('Unexpected medicine knowledge failure.', error, stackTrace);
-
-      return const _KnowledgeLoadResult(
-        knowledge: null,
-        messageSuffix: ' Reviewed medicine information could not be loaded.',
-      );
-    }
-  }
-
-  bool _knowledgeMatchesMedicine(
-    MedicinePrice medicine,
-    MedicineKnowledge knowledge,
-  ) {
-    final medicineId = _normalizeIdentity(medicine.medicineId);
-
-    final knowledgeId = _normalizeIdentity(knowledge.medicineId);
-
-    if (medicineId.isNotEmpty && knowledgeId.isNotEmpty) {
-      return medicineId == knowledgeId;
-    }
-
-    final knowledgeProduct = MedicinePrice(
-      medicineId: knowledge.medicineId,
-      brandName: knowledge.brandNames.isNotEmpty
-          ? knowledge.brandNames.first
-          : '',
-      genericName: knowledge.genericName,
-      activeIngredients: knowledge.activeIngredients,
-      strength: knowledge.strength,
-      dosageForm: knowledge.dosageForm,
-      route: knowledge.localizedRoute(isArabic: false),
-      packSize: null,
-      manufacturer: null,
-      atcCode: knowledge.atcCode,
-      registrationNumber: null,
-      priceLbp: null,
-      currency: 'LBP',
-      effectiveDate: null,
-      similarityScore: 1,
-      dataSource: 'medicine_knowledge',
-      sourceName: knowledge.sourceName,
-      sourceUrl: knowledge.sourceUrl,
-      isActive: true,
-      isVerified: knowledge.isVerified,
-    );
-
-    return medicine.hasSameCompositionAs(knowledgeProduct) &&
-        medicine.hasSameStrengthAs(knowledgeProduct) &&
-        medicine.hasSameDosageFormAs(knowledgeProduct) &&
-        medicine.hasCompatibleRouteWith(knowledgeProduct);
-  }
-
   VerifiedMedicineResult _skippedResult(AiMedicineSuggestion suggestion) {
     return VerifiedMedicineResult(
       suggestion: suggestion,
@@ -1286,13 +1171,6 @@ class MedicineVerificationService {
     return aliases[normalized] ?? normalized;
   }
 
-  String _normalizeIdentity(String value) {
-    return value.toLowerCase().trim().replaceAll(
-      RegExp(r'[^a-z0-9\u0600-\u06FF]+'),
-      '',
-    );
-  }
-
   String _normalizeMedicineName(String value) {
     return value
         .toLowerCase()
@@ -1434,14 +1312,4 @@ class _FormPattern {
 
   final String pattern;
   final String normalized;
-}
-
-class _KnowledgeLoadResult {
-  const _KnowledgeLoadResult({
-    required this.knowledge,
-    required this.messageSuffix,
-  });
-
-  final MedicineKnowledge? knowledge;
-  final String messageSuffix;
 }

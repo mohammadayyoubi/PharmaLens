@@ -47,6 +47,14 @@
 			</array>
 		</dict>
 	</dict>
+	<key>GMSApiKey</key>
+	<string>$(MAPS_API_KEY)</string>
+	<key>NSCameraUsageDescription</key>
+	<string>PharmaLens uses the camera to photograph prescriptions for reading. / يستخدم فارما لينس الكاميرا لتصوير الوصفات الطبية.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>PharmaLens opens prescription images you choose from your photos. / يفتح فارما لينس صور الوصفات التي تختارها.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>PharmaLens uses your location to show nearby pharmacies and hospitals. / يستخدم فارما لينس موقعك لعرض الصيدليات والمستشفيات القريبة.</string>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	<key>UILaunchStoryboardName</key>

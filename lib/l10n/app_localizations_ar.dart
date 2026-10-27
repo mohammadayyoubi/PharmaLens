@@ -163,4 +163,10 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get medicalDisclaimer =>
       'يوفر PharmaLens معلومات مساعدة ولا يحل محل الطبيب أو الصيدلي.';
+
+  @override
+  String get prescriptionAnalysis => 'تحليل الوصفة الطبية';
+
+  @override
+  String get tryAgain => 'إعادة المحاولة';
 }

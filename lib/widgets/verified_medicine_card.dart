@@ -789,9 +789,7 @@ class _ArrowButtonVisual
         ),
       ),
       child: Icon(
-        isArabic
-            ? Icons.chevron_left_rounded
-            : Icons.chevron_right_rounded,
+        Icons.chevron_right_rounded,
         color: color,
         size: 22,
       ),

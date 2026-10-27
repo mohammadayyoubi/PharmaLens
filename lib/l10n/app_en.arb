@@ -57,5 +57,8 @@
   "commonSideEffects": "Common side effects",
   "importantWarnings": "Important warnings",
 
-  "medicalDisclaimer": "PharmaLens provides informational support and does not replace a doctor or pharmacist."
+  "medicalDisclaimer": "PharmaLens provides informational support and does not replace a doctor or pharmacist.",
+
+  "prescriptionAnalysis": "Prescription analysis",
+  "tryAgain": "Try again"
 }

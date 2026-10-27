@@ -1,3 +1,5 @@
+import '../utils/doctor_gender_resolver.dart';
+
 class Doctor {
   const Doctor({
     required this.id,
@@ -29,6 +31,7 @@ class Doctor {
     required this.lastVerifiedAt,
     required this.isVerified,
     required this.isActive,
+    this.genderEstimated = false,
   });
 
   final String id;
@@ -72,6 +75,10 @@ class Doctor {
 
   final bool isVerified;
   final bool isActive;
+
+  /// True when [gender] was inferred from the first name because the source
+  /// record has none (see [DoctorGenderResolver]).
+  final bool genderEstimated;
 
   factory Doctor.fromMap(
       Map<String, dynamic> map,
@@ -165,6 +172,18 @@ class Doctor {
       ],
     );
 
+    final recordedGender = _normalizeGender(
+      _stringValue(
+        map['gender'],
+      ),
+    );
+
+    final gender = recordedGender.isNotEmpty
+        ? recordedGender
+        : DoctorGenderResolver.fromArabicName(
+      nameAr,
+    );
+
     return Doctor(
       id: _stringValue(
         map['id'],
@@ -179,11 +198,9 @@ class Doctor {
       ),
       nameEn: nameEn,
       nameAr: nameAr,
-      gender: _normalizeGender(
-        _stringValue(
-          map['gender'],
-        ),
-      ),
+      gender: gender,
+      genderEstimated: recordedGender.isEmpty &&
+          gender.isNotEmpty,
       specialtyEn: specialtyEn,
       specialtyAr: specialtyAr,
       subspecialty: subspecialty,
@@ -235,7 +252,8 @@ class Doctor {
         map['is_verified'],
       ),
       isActive: _boolValue(
-        map['is_active'],
+        map['is_active'] ??
+            map['isactive'],
         fallback: true,
       ),
     );
@@ -409,6 +427,8 @@ class Doctor {
   // ============================================================
 
   String get displayLocation {
+    // The Order of Physicians list puts "Lebanon" in every location field;
+    // that says nothing useful, so it is treated as no location.
     final values = <String>[
       cityArea,
       area,
@@ -419,7 +439,11 @@ class Doctor {
           (value) => value.trim(),
     )
         .where(
-          (value) => value.isNotEmpty,
+          (value) =>
+          value.isNotEmpty &&
+              !_countryPlaceholders.contains(
+                value.toLowerCase(),
+              ),
     )
         .toSet()
         .toList();
@@ -431,6 +455,46 @@ class Doctor {
     return values.join(
       ' • ',
     );
+  }
+
+  static const Set<String> _countryPlaceholders = <String>{
+    'lebanon',
+    'لبنان',
+  };
+
+  /// Hospitals the doctor is affiliated with ("A; B" in the source data).
+  List<String> get hospitals {
+    return hospitalName
+        .split(
+      ';',
+    )
+        .map(
+          (value) => value.trim(),
+    )
+        .where(
+          (value) => value.isNotEmpty,
+    )
+        .toList();
+  }
+
+  /// Hospitals, or "Private clinic" when the doctor lists none.
+  String facilityLabel({
+    required bool isArabic,
+  }) {
+    if (clinicName.trim().isNotEmpty) {
+      return <String>[
+        clinicName.trim(),
+        ...hospitals,
+      ].join(' • ');
+    }
+
+    if (hospitals.isNotEmpty) {
+      return hospitals.join(' • ');
+    }
+
+    return isArabic
+        ? 'عيادة خاصة'
+        : 'Private clinic';
   }
 
   String get displayAddress {

@@ -20,8 +20,6 @@ dependencies:
   image_picker: ^1.1.2
   google_mlkit_text_recognition: ^0.14.0
 
-  hive: ^2.2.3
-  hive_flutter: ^1.1.0
   path_provider: ^2.1.4
 
   string_similarity: ^2.0.0
@@ -31,14 +29,18 @@ dependencies:
   geolocator: ^13.0.1
   google_maps_flutter: ^2.10.0
 
-  supabase_flutter: ^2.8.0
   shared_preferences: ^2.3.2
+  flutter_local_notifications: ^22.3.3
+  timezone: ^0.11.2
+  flutter_timezone: ^5.1.1
+  connectivity_plus: ^7.3.2
+  flutter_tts: ^4.2.5
 
 dev_dependencies:
+  flutter_lints: ^6.0.0
   flutter_test:
     sdk: flutter
 
-  # flutter_lints: ^5.0.0
 
 flutter:
   uses-material-design: true
@@ -48,5 +50,4 @@ flutter:
     - assets/medicines/medicines.csv
     - assets/medicines/medicine_details.json
     - assets/medicines/lebanon_medicine_prices.csv
-    - assets/pharmacies/lebanon_pharmacies.json
     - assets/doctors/lebanon_doctors.csv

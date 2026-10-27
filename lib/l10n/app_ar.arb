@@ -57,5 +57,8 @@
   "commonSideEffects": "الأعراض الجانبية الشائعة",
   "importantWarnings": "تحذيرات مهمة",
 
-  "medicalDisclaimer": "يوفر PharmaLens معلومات مساعدة ولا يحل محل الطبيب أو الصيدلي."
+  "medicalDisclaimer": "يوفر PharmaLens معلومات مساعدة ولا يحل محل الطبيب أو الصيدلي.",
+
+  "prescriptionAnalysis": "تحليل الوصفة الطبية",
+  "tryAgain": "إعادة المحاولة"
 }

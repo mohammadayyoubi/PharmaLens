@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
@@ -6,13 +8,20 @@ import '../localization/localization_extension.dart';
 import '../models/ai_handwriting_result.dart';
 import '../models/doctor_context.dart';
 import '../models/medicine_price.dart';
+import '../models/prescription_record.dart';
 import '../models/verified_medicine_result.dart';
 import '../services/ai_handwriting_service.dart';
+import '../services/health_profile_service.dart';
+import '../services/medication_safety_service.dart';
 import '../services/medicine_verification_service.dart';
 import '../services/ocr_service.dart';
+import '../services/prescription_history_service.dart';
 import '../services/specialty_context_service.dart';
 import '../theme/pharmalens_theme.dart';
 import '../widgets/chatbot_view.dart';
+import '../widgets/reminder_editor.dart';
+import '../widgets/responsive.dart';
+import '../widgets/safety_alert_card.dart';
 import 'medicine_details_screen.dart';
 import 'medicine_search_screen.dart';
 
@@ -46,6 +55,13 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
 
   final TextEditingController _ocrController =
   TextEditingController();
+
+  /// Id of this scan in the on-device history, once saved.
+  String? _historyRecordId;
+
+  /// Serializes history writes so a quick manual pick cannot create a
+  /// second record while the first save is still running.
+  Future<void> _historyWrite = Future<void>.value();
 
   bool _isPreparing = true;
   bool _isAiAnalyzing = false;
@@ -276,6 +292,8 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
 
         _isVerifying = false;
       });
+
+      _saveHistory();
     } on AiHandwritingException catch (
     error,
     stackTrace
@@ -712,6 +730,8 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
         _isVerifying = false;
       });
 
+      _saveHistory();
+
       _openDetails(
         selectedResult,
       );
@@ -743,6 +763,166 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
     ),
     );
     }
+  }
+
+  bool _isConfirmed(
+      VerifiedMedicineResult? verification,
+      ) {
+    return verification != null &&
+        verification.candidate != null &&
+        (verification.hasVerifiedPrescriptionMatch ||
+            verification.isManualSelection);
+  }
+
+  /// MOPH products confirmed for this prescription, for safety checks.
+  List<MedicinePrice> _confirmedProducts() {
+    return _entries()
+        .where(
+          (entry) => _isConfirmed(
+        entry.verification,
+      ),
+    )
+        .map(
+          (entry) => entry.verification!.candidate!,
+    )
+        .toList();
+  }
+
+  String _instructionsFor(
+      AiMedicineSuggestion suggestion,
+      ) {
+    final written =
+    suggestion.writtenInstructions.trim();
+
+    if (written.isNotEmpty) {
+      return written;
+    }
+
+    return <String>[
+      suggestion.dose,
+      suggestion.frequency,
+      suggestion.duration,
+    ]
+        .map(
+          (value) => value.trim(),
+    )
+        .where(
+          (value) =>
+      value.isNotEmpty &&
+          value.toLowerCase() != 'unknown',
+    )
+        .join(' · ');
+  }
+
+  PrescriptionMedicineEntry _historyEntry(
+      _PrescriptionEntry entry,
+      ) {
+    final suggestion =
+        entry.suggestion;
+
+    final verification =
+        entry.verification;
+
+    final product =
+    _isConfirmed(
+      verification,
+    )
+        ? verification!.candidate
+        : null;
+
+    return PrescriptionMedicineEntry(
+      writtenName: _PrescriptionMedicineTile._readName(
+        suggestion,
+      ),
+      medicineId: product?.medicineId ?? '',
+      brandName: product?.brandName ?? '',
+      strength: product?.strength ??
+          suggestion.strength,
+      dosageForm: product?.dosageForm ??
+          suggestion.form,
+      ingredients: product?.activeIngredients ??
+          const <String>[],
+      instructions: _instructionsFor(
+        suggestion,
+      ),
+      verified: product != null,
+    );
+  }
+
+  void _saveHistory() {
+    final medicines = _entries()
+        .where(
+          (entry) => !entry.suggestion.isUnreadable,
+    )
+        .map(
+      _historyEntry,
+    )
+        .toList();
+
+    if (medicines.isEmpty) {
+      return;
+    }
+
+    final history =
+    PrescriptionHistoryService();
+
+    _historyWrite = _historyWrite.then((_) async {
+      try {
+        final id =
+            _historyRecordId;
+
+        if (id == null) {
+          final record = await history.add(
+            medicines: medicines,
+            doctorName: _doctorContext.detectedDoctorName,
+            specialty: _doctorContext.detectedSpecialty,
+            imageBytes: widget.imageBytes,
+          );
+
+          _historyRecordId = record.id;
+        } else {
+          await history.updateMedicines(
+            id,
+            medicines,
+          );
+        }
+      } catch (
+      error,
+      stackTrace
+      ) {
+        _debugLog(
+          'Saving prescription history failed.',
+          error,
+          stackTrace,
+        );
+      }
+    });
+  }
+
+  void _remind(
+      _PrescriptionEntry entry,
+      ) {
+    final verification =
+        entry.verification;
+
+    final product =
+    _isConfirmed(
+      verification,
+    )
+        ? verification!.candidate
+        : null;
+
+    showReminderEditor(
+      context,
+      medicineName: product?.brandName ??
+          _PrescriptionMedicineTile._readName(
+            entry.suggestion,
+          ),
+      medicineId: product?.medicineId ?? '',
+      doseNote: _instructionsFor(
+        entry.suggestion,
+      ),
+    );
   }
 
   void _openDetails(
@@ -831,13 +1011,20 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
             gradient: palette.pageGradient,
           ),
           child: SafeArea(
-            child: Center(
-              child: ConstrainedBox(
-                constraints:
-                const BoxConstraints(
-                  maxWidth: 820,
-                ),
-                child: Column(
+            child: LayoutBuilder(
+              builder: (
+                  context,
+                  constraints,
+                  ) {
+                final wide =
+                    constraints.maxWidth >= 1000;
+
+                final gutter =
+                Breakpoints.gutter(
+                  constraints.maxWidth,
+                );
+
+                final column = Column(
                   children: [
                     Padding(
                       padding:
@@ -860,8 +1047,54 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
                       ),
                     ),
                   ],
-                ),
-              ),
+                );
+
+                if (!wide) {
+                  return Center(
+                    child: ConstrainedBox(
+                      constraints:
+                      const BoxConstraints(
+                        maxWidth: 820,
+                      ),
+                      child: column,
+                    ),
+                  );
+                }
+
+                return Center(
+                  child: ConstrainedBox(
+                    constraints:
+                    const BoxConstraints(
+                      maxWidth: 1400,
+                    ),
+                    child: Row(
+                      crossAxisAlignment:
+                      CrossAxisAlignment.stretch,
+                      children: [
+                        Padding(
+                          padding: EdgeInsetsDirectional.fromSTEB(
+                            gutter,
+                            16,
+                            8,
+                            16,
+                          ),
+                          child: SizedBox(
+                            width: constraints.maxWidth * 0.36,
+                            child: _PrescriptionImagePanel(
+                              imageBytes: widget.imageBytes,
+                              isArabic: tr.isArabic,
+                              onExpand: _showImagePreview,
+                            ),
+                          ),
+                        ),
+                        Expanded(
+                          child: column,
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
             ),
           ),
         ),
@@ -882,9 +1115,7 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
       child: Row(
         children: [
           _HeaderButton(
-            icon: tr.isArabic
-                ? Icons.arrow_forward_rounded
-                : Icons.arrow_back_rounded,
+            icon: Icons.arrow_back_rounded,
             onTap: () {
               Navigator.of(context).pop();
             },
@@ -905,9 +1136,7 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
                   AlignmentDirectional
                       .centerStart,
                   child: Text(
-                    tr.t(
-                      'prescriptionAnalysis',
-                    ),
+                    tr.prescriptionAnalysis,
                     maxLines: 1,
                     style: TextStyle(
                       color:
@@ -1017,6 +1246,43 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
         const SizedBox(
           height: 18,
         ),
+        ListenableBuilder(
+          listenable: HealthProfileService(),
+          builder: (
+              context,
+              _,
+              ) {
+            final alerts =
+            const MedicationSafetyService().check(
+              _confirmedProducts(),
+              allergies: HealthProfileService().allergies,
+            );
+
+            if (alerts.isEmpty) {
+              return const SizedBox.shrink();
+            }
+
+            return Padding(
+              padding: const EdgeInsets.only(
+                bottom: 18,
+              ),
+              child: Column(
+                children: [
+                  for (final alert in alerts)
+                    Padding(
+                      padding: const EdgeInsets.only(
+                        bottom: 10,
+                      ),
+                      child: SafetyAlertCard(
+                        alert: alert,
+                        isArabic: tr.isArabic,
+                      ),
+                    ),
+                ],
+              ),
+            );
+          },
+        ),
         Text(
           _localText(
             tr,
@@ -1094,6 +1360,14 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
                     entry,
                   );
                 },
+                onRemind: entry.suggestion.isUnreadable ||
+                    entry.suggestion.isCategoryOnly
+                    ? null
+                    : () {
+                  _remind(
+                    entry,
+                  );
+                },
               ),
             ),
           ),
@@ -1162,6 +1436,27 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
               FontWeight.w900,
             ),
           ),
+          if (!_isVerifying) ...[
+            const SizedBox(
+              height: 6,
+            ),
+            Text(
+              _localText(
+                tr,
+                en:
+                'This usually takes 10 to 30 seconds.',
+                ar:
+                "يستغرق ذلك عادةً من 10 إلى 30 ثانية.",
+              ),
+              textAlign:
+              TextAlign.center,
+              style: TextStyle(
+                color:
+                palette.textSecondary,
+                fontSize: 13,
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -1274,9 +1569,7 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
                   ),
                   label:
                   Text(
-                    tr.t(
-                      'tryAgain',
-                    ),
+                    tr.tryAgain,
                   ),
                 ),
               ),
@@ -1732,12 +2025,14 @@ class _PrescriptionMedicineTile
     required this.isArabic,
     required this.isVerifying,
     required this.onTap,
+    this.onRemind,
   });
 
   final _PrescriptionEntry entry;
   final bool isArabic;
   final bool isVerifying;
   final VoidCallback onTap;
+  final VoidCallback? onRemind;
 
   @override
   Widget build(
@@ -1912,6 +2207,18 @@ class _PrescriptionMedicineTile
               const SizedBox(
                 width: 8,
               ),
+              if (onRemind != null &&
+                  !isVerifying)
+                IconButton(
+                  tooltip: isArabic
+                      ? 'تذكير'
+                      : 'Remind me',
+                  onPressed: onRemind,
+                  icon: const Icon(
+                    Icons.alarm_add_rounded,
+                    color: PharmaLensColors.teal,
+                  ),
+                ),
               if (isVerifying)
                 const SizedBox(
                   width: 22,
@@ -1935,11 +2242,7 @@ class _PrescriptionMedicineTile
                     ),
                   ),
                   child: Icon(
-                    isArabic
-                        ? Icons
-                        .chevron_left_rounded
-                        : Icons
-                        .chevron_right_rounded,
+                    Icons.chevron_right_rounded,
                     color:
                     PharmaLensColors
                         .teal,
@@ -2124,4 +2427,70 @@ IconData _medicineIcon(
   }
 
   return Icons.medication_outlined;
+}
+
+/// The prescription photo, kept beside the results on wide windows so the
+/// user can compare what was read against the original.
+class _PrescriptionImagePanel extends StatelessWidget {
+  const _PrescriptionImagePanel({
+    required this.imageBytes,
+    required this.isArabic,
+    required this.onExpand,
+  });
+
+  final Uint8List imageBytes;
+  final bool isArabic;
+  final VoidCallback onExpand;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = PharmaLensTheme.paletteOf(context);
+
+    return Container(
+      decoration: BoxDecoration(
+        color: palette.surface,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: palette.border),
+        boxShadow: palette.cardShadow,
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 8, 8),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    isArabic ? 'صورة الوصفة' : 'Prescription photo',
+                    style: TextStyle(color: palette.textPrimary, fontWeight: FontWeight.w900),
+                  ),
+                ),
+                IconButton(
+                  tooltip: isArabic ? 'تكبير' : 'Enlarge',
+                  onPressed: onExpand,
+                  icon: const Icon(Icons.open_in_full_rounded),
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: Semantics(
+              image: true,
+              label: isArabic ? 'صورة الوصفة الطبية' : 'Prescription photo',
+              child: InteractiveViewer(
+                maxScale: 5,
+                child: Image.memory(
+                  imageBytes,
+                  fit: BoxFit.contain,
+                  gaplessPlayback: true,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }

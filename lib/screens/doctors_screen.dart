@@ -6,7 +6,10 @@ import 'package:url_launcher/url_launcher.dart';
 import '../models/doctor.dart';
 import '../services/doctors_service.dart';
 import '../theme/pharmalens_theme.dart';
+import '../services/hospital_contact_service.dart';
+import '../utils/formatters.dart';
 import '../widgets/chatbot_view.dart';
+import '../widgets/responsive.dart';
 
 class DoctorsScreen extends StatefulWidget {
   const DoctorsScreen({super.key});
@@ -442,6 +445,61 @@ class _DoctorsScreenState extends State<DoctorsScreen> {
   Future<void> _openDoctor(Doctor doctor) async {
     final palette = PharmaLensTheme.paletteOf(context);
 
+    Widget sheet(bool dialog) {
+      return _DoctorProfileSheet(
+        doctor: doctor,
+        isArabic: _isArabic,
+        asDialog: dialog,
+        onCall: doctor.hasPhone
+            ? () {
+                _call(doctor.phone);
+              }
+            : null,
+        onWhatsapp: doctor.hasWhatsapp
+            ? () {
+                _whatsapp(doctor.whatsapp);
+              }
+            : null,
+        onEmail: doctor.hasEmail
+            ? () {
+                _email(doctor.email);
+              }
+            : null,
+        onDirections: doctor.hasCoordinates || doctor.displayAddress.isNotEmpty
+            ? () {
+                _directions(doctor);
+              }
+            : null,
+        onSource: doctor.hasSourceUrl
+            ? () {
+                _source(doctor);
+              }
+            : null,
+        onCallNumber: _call,
+        onOpenUri: _openUri,
+      );
+    }
+
+    if (MediaQuery.sizeOf(context).width >= 900) {
+      await showDialog<void>(
+        context: context,
+        builder: (_) {
+          return Dialog(
+            backgroundColor: palette.surface,
+            insetPadding: const EdgeInsets.all(32),
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxWidth: 600,
+                maxHeight: MediaQuery.sizeOf(context).height * 0.86,
+              ),
+              child: sheet(true),
+            ),
+          );
+        },
+      );
+      return;
+    }
+
     await showModalBottomSheet<void>(
       context: context,
       useSafeArea: true,
@@ -452,35 +510,7 @@ class _DoctorsScreenState extends State<DoctorsScreen> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
       ),
       builder: (_) {
-        return _DoctorProfileSheet(
-          doctor: doctor,
-          isArabic: _isArabic,
-          onCall: doctor.hasPhone
-              ? () {
-                  _call(doctor.phone);
-                }
-              : null,
-          onWhatsapp: doctor.hasWhatsapp
-              ? () {
-                  _whatsapp(doctor.whatsapp);
-                }
-              : null,
-          onEmail: doctor.hasEmail
-              ? () {
-                  _email(doctor.email);
-                }
-              : null,
-          onDirections: doctor.hasAddressOrCoordinates
-              ? () {
-                  _directions(doctor);
-                }
-              : null,
-          onSource: doctor.hasSourceUrl
-              ? () {
-                  _source(doctor);
-                }
-              : null,
-        );
+        return sheet(false);
       },
     );
   }
@@ -492,165 +522,204 @@ class _DoctorsScreenState extends State<DoctorsScreen> {
     return Scaffold(
       backgroundColor: palette.background,
       floatingActionButton: const FloatingChatbotButton(),
-      appBar: AppBar(
-        backgroundColor: palette.surface,
-        foregroundColor: palette.textPrimary,
-        surfaceTintColor: Colors.transparent,
-        elevation: 0,
-        scrolledUnderElevation: 0,
-        centerTitle: true,
-        title: Text(
-          _t(en: 'Doctors', ar: 'الأطباء'),
-          style: const TextStyle(fontWeight: FontWeight.w900),
-        ),
-      ),
       body: DecoratedBox(
         decoration: BoxDecoration(gradient: palette.pageGradient),
         child: SafeArea(
-          top: false,
-          child: RefreshIndicator(
-            onRefresh: _refresh,
-            child: NotificationListener<ScrollNotification>(
-              onNotification: _handleScroll,
-              child: CustomScrollView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                slivers: <Widget>[
-                  SliverToBoxAdapter(child: _buildControls()),
-                  SliverToBoxAdapter(child: _buildResultsBar()),
-                  ..._buildResults(),
-                ],
-              ),
-            ),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final wide = constraints.maxWidth >= 900;
+              final gutter = Breakpoints.gutter(constraints.maxWidth);
+
+              final results = RefreshIndicator(
+                onRefresh: _refresh,
+                child: NotificationListener<ScrollNotification>(
+                  onNotification: _handleScroll,
+                  child: CustomScrollView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    slivers: <Widget>[
+                      if (!wide)
+                        SliverToBoxAdapter(
+                          child: Padding(
+                            padding: EdgeInsets.fromLTRB(gutter, 8, gutter, 0),
+                            child: _buildFilters(),
+                          ),
+                        ),
+                      SliverToBoxAdapter(child: _buildResultsBar(gutter)),
+                      ..._buildResults(gutter: gutter, wide: wide),
+                    ],
+                  ),
+                ),
+              );
+
+              if (!wide) {
+                return results;
+              }
+
+              return Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 1400),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      SizedBox(
+                        width: 340,
+                        child: SingleChildScrollView(
+                          padding: EdgeInsetsDirectional.fromSTEB(gutter, 12, 0, 24),
+                          child: _buildFilters(),
+                        ),
+                      ),
+                      Expanded(child: results),
+                    ],
+                  ),
+                ),
+              );
+            },
           ),
         ),
       ),
     );
   }
 
-  Widget _buildControls() {
+  Widget _buildFilters() {
     final palette = PharmaLensTheme.paletteOf(context);
 
-    return Container(
-      width: double.infinity,
-      color: palette.surface,
-      padding: const EdgeInsets.fromLTRB(10, 12, 10, 12),
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 860),
-          child: Column(
-            children: <Widget>[
-              _DirectorySummary(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        Row(
+          children: <Widget>[
+            const AdaptiveBackButton(),
+            Expanded(
+              child: _DirectoryHeader(
                 total: _metadata.totalDoctors,
-                female: _metadata.femaleDoctors,
-                male: _metadata.maleDoctors,
                 isArabic: _isArabic,
               ),
+            ),
+          ],
+        ),
 
-              const SizedBox(height: 12),
+        const SizedBox(height: 14),
 
-              TextField(
-                controller: _searchController,
-                autocorrect: false,
-                textInputAction: TextInputAction.search,
-                onChanged: (_) {
-                  _scheduleSearch();
-                },
-                onSubmitted: (_) {
-                  _searchDebounce?.cancel();
+        TextField(
+          controller: _searchController,
+          autocorrect: false,
+          textInputAction: TextInputAction.search,
+          onChanged: (_) {
+            _scheduleSearch();
+          },
+          onSubmitted: (_) {
+            _searchDebounce?.cancel();
 
-                  _loadDoctors(reset: true);
-                },
-                decoration: InputDecoration(
-                  hintText: _t(
-                    en: 'Search doctor, specialty or hospital',
-                    ar: 'ابحث عن طبيب أو اختصاص أو مستشفى',
+            _loadDoctors(reset: true);
+          },
+          decoration: InputDecoration(
+            hintText: _t(
+              en: 'Search doctor, specialty or hospital',
+              ar: 'ابحث عن طبيب أو اختصاص أو مستشفى',
+            ),
+            prefixIcon: const Icon(Icons.search_rounded),
+            suffixIcon: _searchController.text.trim().isEmpty
+                ? null
+                : IconButton(
+                    tooltip: _t(en: 'Clear search', ar: 'مسح البحث'),
+                    onPressed: () {
+                      _searchController.clear();
+
+                      _scheduleSearch();
+                    },
+                    icon: const Icon(Icons.close_rounded),
                   ),
-                  prefixIcon: const Icon(Icons.search_rounded),
-                  suffixIcon: _searchController.text.trim().isEmpty
-                      ? null
-                      : IconButton(
-                          onPressed: () {
-                            _searchController.clear();
-
-                            _scheduleSearch();
-                          },
-                          icon: const Icon(Icons.close_rounded),
-                        ),
-                ),
-              ),
-
-              const SizedBox(height: 10),
-
-              Row(
-                children: <Widget>[
-                  Expanded(
-                    child: _GenderButton(
-                      icon: Icons.groups_rounded,
-                      label: _t(en: 'All', ar: 'الكل'),
-                      count: _metadata.totalDoctors,
-                      selected: _selectedGender.isEmpty,
-                      onTap: () {
-                        _setGender('');
-                      },
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: _GenderButton(
-                      icon: Icons.female_rounded,
-                      label: _t(en: 'Female', ar: 'طبيبات'),
-                      count: _metadata.femaleDoctors,
-                      selected: _selectedGender == 'Female',
-                      onTap: () {
-                        _setGender('Female');
-                      },
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: _GenderButton(
-                      icon: Icons.male_rounded,
-                      label: _t(en: 'Male', ar: 'أطباء'),
-                      count: _metadata.maleDoctors,
-                      selected: _selectedGender == 'Male',
-                      onTap: () {
-                        _setGender('Male');
-                      },
-                    ),
-                  ),
-                ],
-              ),
-
-              const SizedBox(height: 10),
-
-              _SpecialtyButton(
-                value: _selectedSpecialty.isEmpty
-                    ? _t(en: 'All specialties', ar: 'كل الاختصاصات')
-                    : _specialtyLabel(_selectedSpecialty),
-                active: _selectedSpecialty.isNotEmpty,
-                isArabic: _isArabic,
-                onTap: _pickSpecialty,
-              ),
-
-              if (_hasFilters) ...<Widget>[
-                const SizedBox(height: 3),
-                Align(
-                  alignment: AlignmentDirectional.centerEnd,
-                  child: TextButton.icon(
-                    onPressed: _clearFilters,
-                    icon: const Icon(Icons.clear_all_rounded, size: 18),
-                    label: Text(_t(en: 'Clear filters', ar: 'مسح الفلاتر')),
-                  ),
-                ),
-              ],
-            ],
           ),
         ),
-      ),
+
+        const SizedBox(height: 12),
+
+        _SpecialtyButton(
+          value: _selectedSpecialty.isEmpty
+              ? _t(en: 'All specialties', ar: 'كل الاختصاصات')
+              : _specialtyLabel(_selectedSpecialty),
+          active: _selectedSpecialty.isNotEmpty,
+          isArabic: _isArabic,
+          onTap: _pickSpecialty,
+        ),
+
+        const SizedBox(height: 12),
+
+        Text(
+          _t(en: 'Doctor gender', ar: 'جنس الطبيب'),
+          style: TextStyle(
+            color: palette.textSecondary,
+            fontSize: 12,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+
+        const SizedBox(height: 6),
+
+        Row(
+          children: <Widget>[
+            Expanded(
+              child: _GenderButton(
+                icon: Icons.groups_rounded,
+                label: _t(en: 'Any', ar: 'الكل'),
+                selected: _selectedGender.isEmpty,
+                onTap: () {
+                  _setGender('');
+                },
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: _GenderButton(
+                icon: Icons.female_rounded,
+                label: _t(en: 'Female', ar: 'طبيبة'),
+                selected: _selectedGender == 'Female',
+                onTap: () {
+                  _setGender('Female');
+                },
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: _GenderButton(
+                icon: Icons.male_rounded,
+                label: _t(en: 'Male', ar: 'طبيب'),
+                selected: _selectedGender == 'Male',
+                onTap: () {
+                  _setGender('Male');
+                },
+              ),
+            ),
+          ],
+        ),
+
+        if (_selectedGender.isNotEmpty) ...<Widget>[
+          const SizedBox(height: 8),
+          Text(
+            _t(
+              en: 'The official list has no gender field, so it is estimated from the first name. About 1 in 10 doctors cannot be estimated and only appear under "Any".',
+              ar: 'لا تتضمن اللائحة الرسمية الجنس، لذا يُقدَّر من الاسم الأول. حوالي طبيب من كل 10 لا يمكن تقديره ويظهر فقط ضمن "الكل".',
+            ),
+            style: TextStyle(color: palette.textMuted, fontSize: 11.5, height: 1.4),
+          ),
+        ],
+
+        if (_hasFilters) ...<Widget>[
+          const SizedBox(height: 6),
+          Align(
+            alignment: AlignmentDirectional.centerEnd,
+            child: TextButton.icon(
+              onPressed: _clearFilters,
+              icon: const Icon(Icons.clear_all_rounded, size: 18),
+              label: Text(_t(en: 'Clear filters', ar: 'مسح الفلاتر')),
+            ),
+          ),
+        ],
+      ],
     );
   }
 
-  Widget _buildResultsBar() {
+  Widget _buildResultsBar(double gutter) {
     if (_loading && _doctors.isEmpty) {
       return const SizedBox.shrink();
     }
@@ -665,41 +734,39 @@ class _DoctorsScreenState extends State<DoctorsScreen> {
             ar: '${_doctors.length}$moreLabel طبيب/ة مطابقون',
           )
         : _t(
-            en: 'Showing ${_doctors.length}$moreLabel of ${_metadata.totalDoctors}',
-            ar: 'عرض ${_doctors.length}$moreLabel من أصل ${_metadata.totalDoctors}',
+            en: 'Showing ${_doctors.length}$moreLabel of ${formatCount(_metadata.totalDoctors)}',
+            ar: 'عرض ${_doctors.length}$moreLabel من أصل ${formatCount(_metadata.totalDoctors)}',
           );
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 10, 12, 4),
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 860),
-          child: Row(
-            children: <Widget>[
-              Expanded(
-                child: Text(
-                  text,
-                  style: TextStyle(
-                    color: palette.textSecondary,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w800,
-                  ),
+      padding: EdgeInsets.fromLTRB(gutter, 14, gutter, 6),
+      child: Row(
+        children: <Widget>[
+          Expanded(
+            child: Semantics(
+              liveRegion: true,
+              child: Text(
+                text,
+                style: TextStyle(
+                  color: palette.textSecondary,
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w800,
                 ),
               ),
-              if (_loadingMore)
-                const SizedBox(
-                  width: 18,
-                  height: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                ),
-            ],
+            ),
           ),
-        ),
+          if (_loadingMore)
+            const SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+        ],
       ),
     );
   }
 
-  List<Widget> _buildResults() {
+  List<Widget> _buildResults({required double gutter, required bool wide}) {
     if (_loading && _doctors.isEmpty) {
       return const <Widget>[
         SliverFillRemaining(
@@ -732,8 +799,8 @@ class _DoctorsScreenState extends State<DoctorsScreen> {
             icon: Icons.search_off_rounded,
             title: _t(en: 'No matching doctors', ar: 'لا يوجد أطباء مطابقون'),
             subtitle: _t(
-              en: 'Try another doctor, specialty or gender.',
-              ar: 'جرّب طبيبًا أو اختصاصًا أو جنسًا مختلفًا.',
+              en: 'Try another name, specialty or hospital.',
+              ar: 'جرّب اسمًا أو اختصاصًا أو مستشفى مختلفًا.',
             ),
             buttonLabel: _t(en: 'Clear filters', ar: 'مسح الفلاتر'),
             onPressed: _clearFilters,
@@ -742,190 +809,102 @@ class _DoctorsScreenState extends State<DoctorsScreen> {
       ];
     }
 
+    Widget card(Doctor doctor) {
+      return _DoctorCard(
+        doctor: doctor,
+        isArabic: _isArabic,
+        onTap: () {
+          _openDoctor(doctor);
+        },
+        onCall: doctor.hasPhone
+            ? () {
+                _call(doctor.phone);
+              }
+            : null,
+        onWhatsapp: doctor.hasWhatsapp
+            ? () {
+                _whatsapp(doctor.whatsapp);
+              }
+            : null,
+      );
+    }
+
     return <Widget>[
       SliverPadding(
-        padding: const EdgeInsets.fromLTRB(10, 8, 10, 24),
-        sliver: SliverList(
-          delegate: SliverChildBuilderDelegate((context, index) {
-            if (index == _doctors.length) {
-              return _PaginationFooter(
-                loading: _loadingMore,
-                hasMore: _hasMore,
-                isArabic: _isArabic,
-                onLoad: () {
-                  _loadDoctors(reset: false);
-                },
-              );
-            }
-
-            final doctor = _doctors[index];
-
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 10),
-              child: Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 860),
-                  child: _DoctorCard(
-                    doctor: doctor,
-                    isArabic: _isArabic,
-                    onTap: () {
-                      _openDoctor(doctor);
-                    },
-                    onCall: doctor.hasPhone
-                        ? () {
-                            _call(doctor.phone);
-                          }
-                        : null,
-                    onWhatsapp: doctor.hasWhatsapp
-                        ? () {
-                            _whatsapp(doctor.whatsapp);
-                          }
-                        : null,
-                  ),
+        padding: EdgeInsets.fromLTRB(gutter, 6, gutter, 0),
+        sliver: wide
+            ? SliverGrid.builder(
+                gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                  maxCrossAxisExtent: 520,
+                  mainAxisExtent: 150,
+                  crossAxisSpacing: 12,
+                  mainAxisSpacing: 12,
                 ),
+                itemCount: _doctors.length,
+                itemBuilder: (context, index) => card(_doctors[index]),
+              )
+            : SliverList.separated(
+                itemCount: _doctors.length,
+                separatorBuilder: (context, index) => const SizedBox(height: 10),
+                itemBuilder: (context, index) => card(_doctors[index]),
               ),
-            );
-          }, childCount: _doctors.length + 1),
+      ),
+      SliverToBoxAdapter(
+        child: Padding(
+          padding: const EdgeInsets.only(bottom: 88),
+          child: _PaginationFooter(
+            loading: _loadingMore,
+            hasMore: _hasMore,
+            isArabic: _isArabic,
+            onLoad: () {
+              _loadDoctors(reset: false);
+            },
+          ),
         ),
       ),
     ];
   }
 }
 
-class _DirectorySummary extends StatelessWidget {
-  const _DirectorySummary({
+class _DirectoryHeader extends StatelessWidget {
+  const _DirectoryHeader({
     required this.total,
-    required this.female,
-    required this.male,
     required this.isArabic,
   });
 
   final int total;
-  final int female;
-  final int male;
   final bool isArabic;
 
   @override
   Widget build(BuildContext context) {
-    final isDark = PharmaLensTheme.isDark(context);
+    final palette = PharmaLensTheme.paletteOf(context);
 
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(15),
-      decoration: PharmaLensDecorations.heroCard(
-        borderRadius: BorderRadius.circular(23),
-        isDark: isDark,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Row(
-            children: <Widget>[
-              Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.13),
-                  borderRadius: BorderRadius.circular(15),
-                ),
-                child: const Icon(
-                  Icons.local_hospital_outlined,
-                  color: Colors.white,
-                ),
-              ),
-              const SizedBox(width: 11),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    Text(
-                      isArabic ? 'دليل الأطباء' : 'Doctors Directory',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 19,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                    const SizedBox(height: 3),
-                    Text(
-                      isArabic
-                          ? 'أطباء واختصاصات ومعلومات تواصل في لبنان.'
-                          : 'Doctors, specialties and contact information in Lebanon.',
-                      style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.72),
-                        fontSize: 10.5,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: <Widget>[
-              Expanded(
-                child: _SummaryStat(
-                  value: total,
-                  label: isArabic ? 'المجموع' : 'Total',
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _SummaryStat(
-                  value: female,
-                  label: isArabic ? 'طبيبات' : 'Female',
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _SummaryStat(
-                  value: male,
-                  label: isArabic ? 'أطباء' : 'Male',
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _SummaryStat extends StatelessWidget {
-  const _SummaryStat({required this.value, required this.label});
-
-  final int value;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 6),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(13),
-      ),
-      child: Column(
-        children: <Widget>[
-          Text(
-            '$value',
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 15,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Semantics(
+          header: true,
+          child: Text(
+            isArabic ? 'دليل الأطباء' : 'Doctors',
+            style: TextStyle(
+              color: palette.textPrimary,
+              fontSize: 26,
               fontWeight: FontWeight.w900,
             ),
           ),
-          Text(
-            label,
-            style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.70),
-              fontSize: 9,
-              fontWeight: FontWeight.w700,
-            ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          isArabic
+              ? '${formatCount(total)} طبيب مسجل في نقابة الأطباء في لبنان'
+              : '${formatCount(total)} doctors registered with the Lebanese Order of Physicians',
+          style: TextStyle(
+            color: palette.textSecondary,
+            fontSize: 12.5,
+            fontWeight: FontWeight.w600,
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
@@ -934,14 +913,12 @@ class _GenderButton extends StatelessWidget {
   const _GenderButton({
     required this.icon,
     required this.label,
-    required this.count,
     required this.selected,
     required this.onTap,
   });
 
   final IconData icon;
   final String label;
-  final int count;
   final bool selected;
   final VoidCallback onTap;
 
@@ -981,11 +958,6 @@ class _GenderButton extends StatelessWidget {
                   fontSize: 11,
                   fontWeight: FontWeight.w900,
                 ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                '$count',
-                style: TextStyle(color: palette.textMuted, fontSize: 9.5),
               ),
             ],
           ),
@@ -1061,9 +1033,7 @@ class _SpecialtyButton extends StatelessWidget {
                 ),
               ),
               Icon(
-                isArabic
-                    ? Icons.chevron_left_rounded
-                    : Icons.chevron_right_rounded,
+                Icons.chevron_right_rounded,
                 color: palette.textMuted,
               ),
             ],
@@ -1181,14 +1151,12 @@ class _DoctorCard extends StatelessWidget {
                     ),
                   ),
                   Icon(
-                    isArabic
-                        ? Icons.chevron_left_rounded
-                        : Icons.chevron_right_rounded,
+                    Icons.chevron_right_rounded,
                     color: palette.textMuted,
                   ),
                 ],
               ),
-              if (doctor.displayFacility.isNotEmpty) ...[
+              ...[
                 const SizedBox(height: 10),
                 Container(
                   width: double.infinity,
@@ -1203,15 +1171,17 @@ class _DoctorCard extends StatelessWidget {
                   ),
                   child: Row(
                     children: <Widget>[
-                      const Icon(
-                        Icons.local_hospital_outlined,
+                      Icon(
+                        doctor.hospitals.isEmpty
+                            ? Icons.storefront_outlined
+                            : Icons.local_hospital_outlined,
                         color: PharmaLensColors.teal,
                         size: 16,
                       ),
                       const SizedBox(width: 7),
                       Expanded(
                         child: Text(
-                          doctor.displayFacility,
+                          doctor.facilityLabel(isArabic: isArabic),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
@@ -1307,6 +1277,9 @@ class _DoctorProfileSheet extends StatelessWidget {
   const _DoctorProfileSheet({
     required this.doctor,
     required this.isArabic,
+    required this.onCallNumber,
+    required this.onOpenUri,
+    this.asDialog = false,
     this.onCall,
     this.onWhatsapp,
     this.onEmail,
@@ -1316,6 +1289,10 @@ class _DoctorProfileSheet extends StatelessWidget {
 
   final Doctor doctor;
   final bool isArabic;
+  final bool asDialog;
+
+  final Future<void> Function(String phone) onCallNumber;
+  final Future<void> Function(Uri uri) onOpenUri;
 
   final VoidCallback? onCall;
   final VoidCallback? onWhatsapp;
@@ -1332,9 +1309,10 @@ class _DoctorProfileSheet extends StatelessWidget {
     final name = doctor.localizedName(isArabic: isArabic);
 
     return SizedBox(
-      height: MediaQuery.sizeOf(context).height * 0.85,
+      height: asDialog ? null : MediaQuery.sizeOf(context).height * 0.85,
       child: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+        shrinkWrap: asDialog,
+        padding: EdgeInsets.fromLTRB(16, asDialog ? 16 : 0, 16, 24),
         children: <Widget>[
           Container(
             padding: const EdgeInsets.all(18),
@@ -1370,8 +1348,29 @@ class _DoctorProfileSheet extends StatelessWidget {
                     ),
                   ),
                 ],
+                if (doctor.gender.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    doctor.genderEstimated
+                        ? '${doctor.localizedGender(isArabic: isArabic)} · ${_t(en: 'estimated from name', ar: 'مقدّر من الاسم')}'
+                        : doctor.localizedGender(isArabic: isArabic),
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.62),
+                      fontSize: 11.5,
+                    ),
+                  ),
+                ],
               ],
             ),
+          ),
+
+          const SizedBox(height: 12),
+
+          _ContactSection(
+            doctor: doctor,
+            isArabic: isArabic,
+            onCallNumber: onCallNumber,
+            onOpenUri: onOpenUri,
           ),
 
           const SizedBox(height: 12),
@@ -1422,7 +1421,7 @@ class _DoctorProfileSheet extends StatelessWidget {
               ),
               _InfoItem(
                 label: _t(en: 'Hospital / Clinic', ar: 'المستشفى / العيادة'),
-                value: doctor.displayFacility,
+                value: doctor.facilityLabel(isArabic: isArabic),
               ),
               _InfoItem(
                 label: _t(en: 'Location', ar: 'الموقع'),
@@ -1475,8 +1474,8 @@ class _DoctorProfileSheet extends StatelessWidget {
 
           Text(
             _t(
-              en: 'Contact details can change. Confirm directly with the clinic or hospital before visiting.',
-              ar: 'قد تتغير معلومات التواصل. تأكد من العيادة أو المستشفى قبل الزيارة.',
+              en: 'The Order of Physicians list does not publish doctors\' phone numbers or clinic addresses. Hospital contacts come from Google Maps and can change; confirm before visiting.',
+              ar: 'لا تنشر لائحة نقابة الأطباء أرقام هواتف الأطباء أو عناوين العيادات. معلومات المستشفيات من خرائط Google وقد تتغير؛ تأكد قبل الزيارة.',
             ),
             textAlign: TextAlign.center,
             style: TextStyle(
@@ -1862,6 +1861,207 @@ class _EmptyState extends StatelessWidget {
           OutlinedButton(onPressed: onPressed, child: Text(buttonLabel)),
         ],
       ),
+    );
+  }
+}
+
+/// How to reach the doctor. The source list has no doctor phone numbers or
+/// clinic addresses, so the doctor's own details are shown when present and
+/// otherwise the public switchboard and location of their hospital(s).
+class _ContactSection extends StatelessWidget {
+  const _ContactSection({
+    required this.doctor,
+    required this.isArabic,
+    required this.onCallNumber,
+    required this.onOpenUri,
+  });
+
+  final Doctor doctor;
+  final bool isArabic;
+  final Future<void> Function(String phone) onCallNumber;
+  final Future<void> Function(Uri uri) onOpenUri;
+
+  String _t({required String en, required String ar}) => isArabic ? ar : en;
+
+  Uri _mapsSearch(String query) {
+    return Uri.https('www.google.com', '/maps/search/', <String, String>{
+      'api': '1',
+      'query': query,
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = PharmaLensTheme.paletteOf(context);
+    final hospitals = doctor.hospitals.take(3).toList();
+    final service = HospitalContactService();
+
+    final children = <Widget>[];
+
+    if (doctor.hasPhone || doctor.hasCoordinates) {
+      children.add(
+        _ContactRow(
+          icon: Icons.person_pin_circle_outlined,
+          title: _t(en: 'Doctor', ar: 'الطبيب'),
+          subtitle: [doctor.phone, doctor.displayAddress].where((v) => v.trim().isNotEmpty).join('\n'),
+          onCall: doctor.hasPhone ? () => onCallNumber(doctor.phone) : null,
+          onMap: doctor.hasCoordinates
+              ? () => onOpenUri(_mapsSearch('${doctor.latitude},${doctor.longitude}'))
+              : null,
+          isArabic: isArabic,
+        ),
+      );
+    }
+
+    for (final hospital in hospitals) {
+      children.add(
+        FutureBuilder<HospitalContact?>(
+          future: service.find(hospital, languageCode: isArabic ? 'ar' : 'en'),
+          builder: (context, snapshot) {
+            final contact = snapshot.data;
+            final loading = snapshot.connectionState != ConnectionState.done;
+
+            return _ContactRow(
+              icon: Icons.local_hospital_outlined,
+              title: hospital,
+              subtitle: loading
+                  ? _t(en: 'Looking up hospital contact...', ar: 'جارٍ البحث عن معلومات المستشفى...')
+                  : contact == null
+                      ? _t(en: 'Contact not found. Search it on the map.', ar: 'لم يتم العثور على المعلومات. ابحث على الخريطة.')
+                      : [contact.phone, contact.address].where((v) => v.isNotEmpty).join('\n'),
+              loading: loading,
+              onCall: contact != null && contact.hasPhone ? () => onCallNumber(contact.phone) : null,
+              onMap: () => onOpenUri(
+                contact != null && contact.mapsUrl.isNotEmpty
+                    ? Uri.parse(contact.mapsUrl)
+                    : _mapsSearch('$hospital hospital Lebanon'),
+              ),
+              isArabic: isArabic,
+            );
+          },
+        ),
+      );
+    }
+
+    if (hospitals.isEmpty && !doctor.hasPhone) {
+      final query = '${doctor.fullName} ${doctor.specialtyEn} Lebanon';
+      children.add(
+        _ContactRow(
+          icon: Icons.storefront_outlined,
+          title: _t(en: 'Private clinic', ar: 'عيادة خاصة'),
+          subtitle: _t(
+            en: 'The clinic address is not in the official list. You can search for it:',
+            ar: 'عنوان العيادة غير موجود في اللائحة الرسمية. يمكنك البحث عنه:',
+          ),
+          onMap: () => onOpenUri(_mapsSearch(query)),
+          onWeb: () => onOpenUri(Uri.https('www.google.com', '/search', <String, String>{'q': query})),
+          isArabic: isArabic,
+        ),
+      );
+    }
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: palette.surface,
+        borderRadius: BorderRadius.circular(19),
+        border: Border.all(color: palette.border),
+        boxShadow: palette.cardShadow,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          Text(
+            _t(en: 'Contact & location', ar: 'التواصل والموقع'),
+            style: TextStyle(color: palette.textPrimary, fontSize: 15, fontWeight: FontWeight.w900),
+          ),
+          const SizedBox(height: 8),
+          for (var i = 0; i < children.length; i++) ...[
+            if (i > 0) Divider(height: 18, color: palette.borderSoft),
+            children[i],
+          ],
+          if (!service.isConfigured && hospitals.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text(
+              _t(
+                en: 'Hospital phone lookup needs a Google Places key in the app configuration.',
+                ar: 'البحث عن هاتف المستشفى يحتاج إلى مفتاح Google Places في إعدادات التطبيق.',
+              ),
+              style: TextStyle(color: palette.textMuted, fontSize: 11),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _ContactRow extends StatelessWidget {
+  const _ContactRow({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.isArabic,
+    this.loading = false,
+    this.onCall,
+    this.onMap,
+    this.onWeb,
+  });
+
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final bool isArabic;
+  final bool loading;
+  final VoidCallback? onCall;
+  final VoidCallback? onMap;
+  final VoidCallback? onWeb;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = PharmaLensTheme.paletteOf(context);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Icon(icon, color: PharmaLensColors.teal, size: 20),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(title, style: TextStyle(color: palette.textPrimary, fontWeight: FontWeight.w800)),
+                  if (subtitle.isNotEmpty) ...[
+                    const SizedBox(height: 2),
+                    Text(subtitle, style: TextStyle(color: palette.textSecondary, fontSize: 12, height: 1.4)),
+                  ],
+                ],
+              ),
+            ),
+            if (loading)
+              const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
+          ],
+        ),
+        if (onCall != null || onMap != null || onWeb != null) ...[
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: <Widget>[
+              if (onCall != null)
+                _ProfileAction(icon: Icons.call_rounded, label: isArabic ? 'اتصال' : 'Call', onTap: onCall!),
+              if (onMap != null)
+                _ProfileAction(icon: Icons.map_outlined, label: isArabic ? 'الخريطة' : 'Map', onTap: onMap!),
+              if (onWeb != null)
+                _ProfileAction(icon: Icons.travel_explore_rounded, label: isArabic ? 'بحث' : 'Search web', onTap: onWeb!),
+            ],
+          ),
+        ],
+      ],
     );
   }
 }

@@ -1176,7 +1176,15 @@ class _PharmaciesMapScreenState extends State<PharmaciesMapScreen> {
     );
 
     return SafeArea(
-      child: Padding(
+      child: Align(
+        alignment:
+        AlignmentDirectional.topStart,
+        child: ConstrainedBox(
+          constraints:
+          const BoxConstraints(
+            maxWidth: 720,
+          ),
+          child: Padding(
         padding:
         const EdgeInsets.fromLTRB(
           12,
@@ -1186,6 +1194,9 @@ class _PharmaciesMapScreenState extends State<PharmaciesMapScreen> {
         ),
         child: Row(
           children: [
+            if (Navigator.of(
+              context,
+            ).canPop())
             Material(
               color:
               palette.surface,
@@ -1224,11 +1235,7 @@ class _PharmaciesMapScreenState extends State<PharmaciesMapScreen> {
                   ),
                   child:
                   Icon(
-                    _isArabic
-                        ? Icons
-                        .arrow_forward_rounded
-                        : Icons
-                        .arrow_back_rounded,
+                    Icons.arrow_back_rounded,
                     color:
                     palette.textPrimary,
                   ),
@@ -1236,6 +1243,9 @@ class _PharmaciesMapScreenState extends State<PharmaciesMapScreen> {
               ),
             ),
 
+            if (Navigator.of(
+              context,
+            ).canPop())
             const SizedBox(
               width:
               10,
@@ -1310,6 +1320,8 @@ class _PharmaciesMapScreenState extends State<PharmaciesMapScreen> {
               ),
             ),
           ],
+        ),
+      ),
         ),
       ),
     );
@@ -1861,16 +1873,30 @@ class _PharmaciesMapScreenState extends State<PharmaciesMapScreen> {
 
           _buildMapButtons(),
 
-          PositionedDirectional(
-            start:
-            12,
-            end:
-            12,
-            bottom:
-            18,
-            child:
-            _buildBottomPanel(),
-          ),
+          // On wide windows the place list floats as a card beside the map
+          // instead of stretching across the whole width.
+          if (MediaQuery.sizeOf(context).width >= 900)
+            PositionedDirectional(
+              start:
+              16,
+              bottom:
+              18,
+              width:
+              440,
+              child:
+              _buildBottomPanel(),
+            )
+          else
+            PositionedDirectional(
+              start:
+              12,
+              end:
+              12,
+              bottom:
+              18,
+              child:
+              _buildBottomPanel(),
+            ),
 
           if (_isLoading)
             _buildLoadingOverlay(),
@@ -2163,11 +2189,7 @@ class _NearbyPlacesPanel
                     ),
                     trailing:
                     Icon(
-                      isArabic
-                          ? Icons
-                          .chevron_left_rounded
-                          : Icons
-                          .chevron_right_rounded,
+                      Icons.chevron_right_rounded,
                       color:
                       palette.textMuted,
                     ),

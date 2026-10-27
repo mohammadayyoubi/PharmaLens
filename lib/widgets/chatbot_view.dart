@@ -9,17 +9,60 @@ import '../services/chatbot_service.dart';
 import '../theme/pharmalens_theme.dart';
 
 class ChatbotView extends StatefulWidget {
-  const ChatbotView({super.key});
+  const ChatbotView({super.key, this.asSidePanel = false});
+
+  /// Full-height docked panel (wide windows) instead of a bottom sheet.
+  final bool asSidePanel;
 
   static Future<void> showAsBottomSheet(BuildContext context) {
     final isDark = PharmaLensTheme.isDark(context);
+    final barrier = Colors.black.withValues(alpha: isDark ? 0.70 : 0.45);
+
+    // On wide windows the assistant docks to the side instead of covering
+    // the page from the bottom.
+    if (MediaQuery.sizeOf(context).width >= 900) {
+      return showGeneralDialog<void>(
+        context: context,
+        barrierDismissible: true,
+        barrierLabel: MaterialLocalizations.of(context).modalBarrierDismissLabel,
+        barrierColor: barrier.withValues(alpha: isDark ? 0.45 : 0.25),
+        transitionDuration: const Duration(milliseconds: 220),
+        // Unlike bottom sheets, general dialogs add no Material ancestor, which
+        // TextField, chips and ink effects require.
+        pageBuilder: (dialogContext, animation, secondaryAnimation) => const SafeArea(
+          child: Align(
+            alignment: AlignmentDirectional.centerEnd,
+            child: Padding(
+              padding: EdgeInsets.all(16),
+              child: SizedBox(
+                width: 440,
+                child: Material(
+                  type: MaterialType.transparency,
+                  child: ChatbotView(asSidePanel: true),
+                ),
+              ),
+            ),
+          ),
+        ),
+        transitionBuilder: (context, animation, secondaryAnimation, child) {
+          final isRtl = Directionality.of(context) == TextDirection.rtl;
+          return SlideTransition(
+            position: Tween<Offset>(
+              begin: Offset(isRtl ? -0.15 : 0.15, 0),
+              end: Offset.zero,
+            ).animate(CurvedAnimation(parent: animation, curve: Curves.easeOutCubic)),
+            child: FadeTransition(opacity: animation, child: child),
+          );
+        },
+      );
+    }
 
     return showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
       backgroundColor: Colors.transparent,
-      barrierColor: Colors.black.withValues(alpha: isDark ? 0.70 : 0.45),
+      barrierColor: barrier,
       builder: (_) => const ChatbotView(),
     );
   }
@@ -196,11 +239,14 @@ class _ChatbotViewState extends State<ChatbotView> {
     final bottomInset = mediaQuery.viewInsets.bottom;
 
     return Container(
-      height: mediaQuery.size.height * 0.88,
+      height: widget.asSidePanel ? double.infinity : mediaQuery.size.height * 0.88,
       margin: EdgeInsets.only(bottom: bottomInset),
+      clipBehavior: widget.asSidePanel ? Clip.antiAlias : Clip.none,
       decoration: BoxDecoration(
         color: palette.surface,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+        borderRadius: widget.asSidePanel
+            ? BorderRadius.circular(24)
+            : const BorderRadius.vertical(top: Radius.circular(28)),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: isDark ? 0.5 : 0.2),
@@ -211,7 +257,7 @@ class _ChatbotViewState extends State<ChatbotView> {
       ),
       child: Column(
         children: [
-          _buildDragHandle(palette),
+          if (!widget.asSidePanel) _buildDragHandle(palette),
           _buildHeader(palette, isDark),
           const Divider(height: 1),
           _buildQuickSuggestions(palette),
@@ -273,12 +319,16 @@ class _ChatbotViewState extends State<ChatbotView> {
               children: [
                 Row(
                   children: [
-                    Text(
-                      _text(en: 'PharmaLens AI', ar: 'مساعد PharmaLens'),
-                      style: TextStyle(
-                        color: palette.textPrimary,
-                        fontSize: 17,
-                        fontWeight: FontWeight.w900,
+                    Flexible(
+                      child: Text(
+                        _text(en: 'PharmaLens AI', ar: 'مساعد PharmaLens'),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: palette.textPrimary,
+                          fontSize: 17,
+                          fontWeight: FontWeight.w900,
+                        ),
                       ),
                     ),
                     const SizedBox(width: 6),
@@ -311,15 +361,19 @@ class _ChatbotViewState extends State<ChatbotView> {
                       ),
                     ),
                     const SizedBox(width: 5),
-                    Text(
-                      _text(
-                        en: 'Prescription Vision & Price Assistant',
-                        ar: 'مساعد تحليل الوصفات والأسعار',
-                      ),
-                      style: TextStyle(
-                        color: palette.textSecondary,
-                        fontSize: 11.5,
-                        fontWeight: FontWeight.w600,
+                    Flexible(
+                      child: Text(
+                        _text(
+                          en: 'Prescription Vision & Price Assistant',
+                          ar: 'مساعد تحليل الوصفات والأسعار',
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: palette.textSecondary,
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                     ),
                   ],

@@ -273,8 +273,8 @@ class MedicineNormalizer {
      * amoxicillin sodium
      *
      * We deliberately DO NOT automatically convert salts to their
-     * base molecules here. That decision belongs to the verified
-     * composition registry in Supabase.
+     * base molecules here. MedicineEquivalence.ingredientKey makes
+     * that decision where it is needed.
      */
     cleaned = cleaned
         .replaceAll('(', ' ')

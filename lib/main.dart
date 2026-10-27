@@ -1,50 +1,38 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'app/app_settings_scope.dart';
+import 'app/app_shell.dart';
 import 'l10n/app_localizations.dart';
-import 'private/supabase_private_config.dart';
-import 'screens/home_screen.dart';
+import 'services/connectivity_service.dart';
 import 'services/doctors_service.dart';
+import 'services/health_profile_service.dart';
 import 'services/moph_medicine_service.dart';
+import 'services/prescription_history_service.dart';
+import 'services/reminder_service.dart';
 import 'theme/pharmalens_theme.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  try {
-    // Initialize MOPH Lebanon official medicine database and Doctors dataset
-    await MophMedicineService().initialize();
-    await DoctorsService().initialize();
+  // Both parse their CSV in a background isolate and never throw; a load
+  // failure is reported through their loadError getters.
+  await Future.wait<void>(<Future<void>>[
+    MophMedicineService().initialize(),
+    DoctorsService().initialize(),
+  ]);
 
-    // Optional Supabase setup attempt (non-blocking)
-    try {
-      if (SupabasePrivateConfig.projectUrl.isNotEmpty) {
-        await Supabase.initialize(
-          url: SupabasePrivateConfig.projectUrl,
-          publishableKey: SupabasePrivateConfig.publishableKey,
-        );
-      }
-    } catch (_) {
-      // Supabase is optional; MOPH Lebanon dataset operates standalone
-    }
+  unawaited(ConnectivityService().start());
+  unawaited(PrescriptionHistoryService().load());
+  unawaited(HealthProfileService().load());
+  unawaited(ReminderService().load());
 
-    runApp(
-      const PharmaLensApp(),
-    );
-  } catch (error, stackTrace) {
-    _debugLog(
-      'MOPH Lebanon dataset initialization failed.',
-      error,
-      stackTrace,
-    );
-
-    runApp(
-      const PharmaLensApp(),
-    );
-  }
+  runApp(
+    const PharmaLensApp(),
+  );
 }
 
 class PharmaLensApp
@@ -308,6 +296,10 @@ class _PharmaLensAppState
   Widget build(
       BuildContext context,
       ) {
+    // Scheduled reminder text follows the app language.
+    ReminderService().languageCode =
+        _selectedLocale.languageCode;
+
     return PharmaLensAppScope(
       themeMode:
       _themeMode,
@@ -384,7 +376,7 @@ class _PharmaLensAppState
 
         home:
         _settingsLoaded
-            ? const HomeScreen()
+            ? const AppShell()
             : const _StartupScreen(),
       ),
     );
@@ -423,170 +415,6 @@ class _StartupScreen
               CircularProgressIndicator(
                 strokeWidth:
                 3,
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _StartupFailureApp
-    extends StatelessWidget {
-  const _StartupFailureApp();
-
-  @override
-  Widget build(
-      BuildContext context,
-      ) {
-    return MaterialApp(
-      debugShowCheckedModeBanner:
-      false,
-      theme:
-      PharmaLensTheme.light,
-      darkTheme:
-      PharmaLensTheme.dark,
-      home:
-      const _StartupFailureScreen(),
-    );
-  }
-}
-
-class _StartupFailureScreen
-    extends StatelessWidget {
-  const _StartupFailureScreen();
-
-  @override
-  Widget build(
-      BuildContext context,
-      ) {
-    final palette =
-    PharmaLensTheme.paletteOf(
-      context,
-    );
-
-    final isDark =
-    PharmaLensTheme.isDark(
-      context,
-    );
-
-    return Scaffold(
-      backgroundColor:
-      palette.background,
-      body: DecoratedBox(
-        decoration:
-        BoxDecoration(
-          gradient:
-          palette.pageGradient,
-        ),
-        child: SafeArea(
-          child: Center(
-            child:
-            SingleChildScrollView(
-              padding:
-              const EdgeInsets.all(
-                28,
-              ),
-              child:
-              ConstrainedBox(
-                constraints:
-                const BoxConstraints(
-                  maxWidth:
-                  460,
-                ),
-                child: Container(
-                  width:
-                  double.infinity,
-                  padding:
-                  const EdgeInsets.all(
-                    22,
-                  ),
-                  decoration:
-                  PharmaLensDecorations
-                      .surfaceCard(
-                    borderRadius:
-                    BorderRadius.circular(
-                      22,
-                    ),
-                    isDark:
-                    isDark,
-                  ),
-                  child: Column(
-                    mainAxisSize:
-                    MainAxisSize.min,
-                    children: [
-                      Container(
-                        width:
-                        72,
-                        height:
-                        72,
-                        decoration:
-                        BoxDecoration(
-                          color:
-                          palette
-                              .dangerSurface,
-                          borderRadius:
-                          BorderRadius.circular(
-                            22,
-                          ),
-                        ),
-                        child:
-                        const Icon(
-                          Icons
-                              .cloud_off_outlined,
-                          color:
-                          PharmaLensColors
-                              .danger,
-                          size:
-                          34,
-                        ),
-                      ),
-
-                      const SizedBox(
-                        height: 18,
-                      ),
-
-                      Text(
-                        'PharmaLens could not start',
-                        textAlign:
-                        TextAlign.center,
-                        style:
-                        TextStyle(
-                          color:
-                          palette
-                              .textPrimary,
-                          fontSize:
-                          20,
-                          fontWeight:
-                          FontWeight
-                              .w900,
-                        ),
-                      ),
-
-                      const SizedBox(
-                        height: 8,
-                      ),
-
-                      Text(
-                        'The application services are temporarily unavailable. Close the app and try again.',
-                        textAlign:
-                        TextAlign.center,
-                        style:
-                        TextStyle(
-                          color:
-                          palette
-                              .textSecondary,
-                          height:
-                          1.5,
-                          fontWeight:
-                          FontWeight
-                              .w600,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
               ),
             ),
           ),

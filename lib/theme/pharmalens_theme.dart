@@ -276,8 +276,8 @@ class PharmaLensTheme {
       brightness: brightness,
       colorScheme: colorScheme,
       scaffoldBackgroundColor: palette.background,
-      splashColor: PharmaLensColors.teal.withOpacity(isDark ? 0.12 : 0.07),
-      highlightColor: PharmaLensColors.teal.withOpacity(isDark ? 0.07 : 0.035),
+      splashColor: PharmaLensColors.teal.withValues(alpha: isDark ? 0.12 : 0.07),
+      highlightColor: PharmaLensColors.teal.withValues(alpha: isDark ? 0.07 : 0.035),
 
       appBarTheme: AppBarTheme(
         centerTitle: true,
@@ -527,6 +527,43 @@ class PharmaLensTheme {
         shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
         ),
+      ),
+
+      navigationBarTheme: NavigationBarThemeData(
+        backgroundColor: palette.surface,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        height: 68,
+        indicatorColor: palette.tealSurface,
+        iconTheme: WidgetStateProperty.resolveWith((states) {
+          return IconThemeData(
+            color: states.contains(WidgetState.selected) ? PharmaLensColors.teal : palette.textSecondary,
+          );
+        }),
+        labelTextStyle: WidgetStateProperty.resolveWith((states) {
+          final selected = states.contains(WidgetState.selected);
+          return TextStyle(
+            color: selected ? palette.textPrimary : palette.textSecondary,
+            fontSize: 11.5,
+            fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+          );
+        }),
+      ),
+
+      navigationRailTheme: NavigationRailThemeData(
+        backgroundColor: palette.surface,
+        indicatorColor: palette.tealSurface,
+        selectedIconTheme: const IconThemeData(color: PharmaLensColors.teal),
+        unselectedIconTheme: IconThemeData(color: palette.textSecondary),
+        selectedLabelTextStyle: TextStyle(color: palette.textPrimary, fontSize: 12, fontWeight: FontWeight.w800),
+        unselectedLabelTextStyle: TextStyle(color: palette.textSecondary, fontSize: 12, fontWeight: FontWeight.w600),
+      ),
+
+      tabBarTheme: TabBarThemeData(
+        labelColor: PharmaLensColors.teal,
+        unselectedLabelColor: palette.textSecondary,
+        indicatorColor: PharmaLensColors.teal,
+        dividerColor: palette.borderSoft,
       ),
 
       chipTheme: ChipThemeData(

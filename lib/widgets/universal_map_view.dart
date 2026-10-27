@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../models/nearby_healthcare_place.dart';
@@ -253,7 +254,6 @@ class UniversalHealthcareMapViewState extends State<UniversalHealthcareMapView>
         final maxTileY = (maxY / 256.0).floor();
 
         final maxTiles = 1 << zInt;
-        final subdomains = const ['a', 'b', 'c', 'd'];
 
         final tileWidgets = <Widget>[];
 
@@ -267,12 +267,11 @@ class UniversalHealthcareMapViewState extends State<UniversalHealthcareMapView>
             final tileScreenY = (height / 2.0) + ((ty * 256.0 - centerY) * scale);
             final tileSize = (256.0 * scale).ceilToDouble() + 1.0;
 
-            final sub = subdomains[((wrappedTx + ty) % 4).abs()];
-            final tileUrl = isDark
-                ? 'https://$sub.basemaps.cartocdn.com/rastertiles/dark_all/$zInt/$wrappedTx/$ty.png'
-                : 'https://$sub.basemaps.cartocdn.com/rastertiles/voyager/$zInt/$wrappedTx/$ty.png';
-
-            final osmFallbackUrl =
+            // CARTO's keyless basemaps now return an "API key required"
+            // image with HTTP 200, so OpenStreetMap is the tile source.
+            // Heavy production traffic should move to a commercial provider
+            // (see https://operations.osmfoundation.org/policies/tiles/).
+            final tileUrl =
                 'https://tile.openstreetmap.org/$zInt/$wrappedTx/$ty.png';
 
             tileWidgets.add(
@@ -281,30 +280,28 @@ class UniversalHealthcareMapViewState extends State<UniversalHealthcareMapView>
                 top: tileScreenY,
                 width: tileSize,
                 height: tileSize,
-                child: Image.network(
-                  tileUrl,
-                  fit: BoxFit.cover,
-                  filterQuality: FilterQuality.medium,
-                  errorBuilder: (context, error, stack) {
-                    return Image.network(
-                      osmFallbackUrl,
-                      fit: BoxFit.cover,
-                      errorBuilder: (context, error, stack) {
-                        return Container(
-                          color: isDark
-                              ? const Color(0xFF0F1E28)
-                              : const Color(0xFFE8F1F5),
-                          child: Center(
-                            child: Icon(
-                              Icons.grid_4x4_rounded,
-                              size: 14,
-                              color: isDark ? Colors.white10 : Colors.black12,
-                            ),
+                child: ColorFiltered(
+                  colorFilter: isDark ? _darkTileFilter : _identityTileFilter,
+                  child: Image.network(
+                    tileUrl,
+                    fit: BoxFit.cover,
+                    filterQuality: FilterQuality.medium,
+                    headers: kIsWeb ? null : const <String, String>{'User-Agent': 'PharmaLens/1.0 (Flutter app)'},
+                    errorBuilder: (context, error, stack) {
+                      return Container(
+                        color: isDark
+                            ? const Color(0xFF0F1E28)
+                            : const Color(0xFFE8F1F5),
+                        child: Center(
+                          child: Icon(
+                            Icons.grid_4x4_rounded,
+                            size: 14,
+                            color: isDark ? Colors.white10 : Colors.black12,
                           ),
-                        );
-                      },
-                    );
-                  },
+                        ),
+                      );
+                    },
+                  ),
                 ),
               ),
             );
@@ -403,7 +400,7 @@ class UniversalHealthcareMapViewState extends State<UniversalHealthcareMapView>
                         borderRadius: BorderRadius.circular(4),
                       ),
                       child: Text(
-                        '© OpenStreetMap, © CARTO',
+                        '© OpenStreetMap contributors',
                         style: TextStyle(
                           fontSize: 9,
                           color: palette.textMuted,
@@ -583,3 +580,19 @@ class _UserLocationDotState extends State<_UserLocationDot>
     );
   }
 }
+
+const ColorFilter _identityTileFilter = ColorFilter.matrix(<double>[
+  1, 0, 0, 0, 0,
+  0, 1, 0, 0, 0,
+  0, 0, 1, 0, 0,
+  0, 0, 0, 1, 0,
+]);
+
+/// Inverts lightness and tints toward the app's dark navy so standard
+/// OpenStreetMap tiles sit comfortably in dark mode.
+const ColorFilter _darkTileFilter = ColorFilter.matrix(<double>[
+  -0.62, -0.12, -0.06, 0, 190,
+  -0.10, -0.60, -0.06, 0, 205,
+  -0.08, -0.10, -0.52, 0, 210,
+  0, 0, 0, 1, 0,
+]);

@@ -1,14 +1,22 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../models/medicine_knowledge.dart';
 import '../models/medicine_price.dart';
 import '../models/verified_medicine_result.dart';
 import '../services/medicine_alternative_service.dart';
-import '../services/medicine_knowledge_service.dart';
+import '../services/medicine_info_service.dart';
 import '../services/medicine_type_resolver.dart';
 import '../theme/pharmalens_theme.dart';
+import '../services/moph_medicine_service.dart';
+import '../services/speech_service.dart';
+import '../utils/atc_groups.dart';
+import '../utils/formatters.dart';
+import '../utils/medicine_equivalence.dart';
 import '../widgets/chatbot_view.dart';
+import '../widgets/reminder_editor.dart';
+import '../widgets/responsive.dart';
 
 class MedicineDetailsScreen extends StatefulWidget {
   const MedicineDetailsScreen({
@@ -29,9 +37,6 @@ class MedicineDetailsScreen extends StatefulWidget {
 }
 
 class _MedicineDetailsScreenState extends State<MedicineDetailsScreen> {
-  final MedicineKnowledgeService _knowledgeService =
-  MedicineKnowledgeService();
-
   final MedicineAlternativeService _alternativeService =
   MedicineAlternativeService();
 
@@ -41,6 +46,13 @@ class _MedicineDetailsScreenState extends State<MedicineDetailsScreen> {
   late Future<_MedicineDetailsData> _future;
 
   bool _isRefreshing = false;
+
+  /// Patient information (uses, side effects...) loads on its own so the
+  /// registry data shows straight away.
+  MedicineInfo? _info;
+  bool _infoLoading = false;
+  bool _infoFailed = false;
+  int _infoRequest = 0;
 
   VerifiedMedicineResult? get _result => widget.result;
 
@@ -61,6 +73,49 @@ class _MedicineDetailsScreenState extends State<MedicineDetailsScreen> {
   void initState() {
     super.initState();
     _future = _loadData();
+    _loadInfo();
+  }
+
+  @override
+  void dispose() {
+    _infoRequest++;
+    final speech = SpeechService();
+    if (speech.ownerId == _DetailActions.speechIdFor(_medicine)) {
+      speech.stop();
+    }
+    super.dispose();
+  }
+
+  Future<void> _loadInfo({
+    bool forceRefresh = false,
+  }) async {
+    final medicine = _medicine;
+    if (medicine == null) return;
+
+    final request = ++_infoRequest;
+    setState(() {
+      _infoLoading = true;
+      _infoFailed = false;
+      if (forceRefresh) _info = null;
+    });
+
+    MedicineInfo? info;
+    var failed = false;
+    try {
+      info = await MedicineInfoService().load(
+        medicine,
+        forceRefresh: forceRefresh,
+      );
+    } catch (error) {
+      failed = true;
+    }
+
+    if (!mounted || request != _infoRequest) return;
+    setState(() {
+      _info = info;
+      _infoFailed = failed;
+      _infoLoading = false;
+    });
   }
 
   @override
@@ -81,6 +136,8 @@ class _MedicineDetailsScreenState extends State<MedicineDetailsScreen> {
     if (oldKey != newKey) {
       _isRefreshing = false;
       _future = _loadData();
+      _info = null;
+      _loadInfo();
     }
   }
 
@@ -93,31 +150,10 @@ class _MedicineDetailsScreenState extends State<MedicineDetailsScreen> {
       return const _MedicineDetailsData();
     }
 
-    MedicineKnowledge? knowledge =
+    final knowledge =
     _safeAttachedKnowledge(medicine);
 
-    Object? knowledgeError;
     Object? alternativesError;
-
-    try {
-      final loadedKnowledge =
-      await _knowledgeService.findBestAvailableProfile(
-        medicine,
-        forceRefresh: forceRefresh,
-      );
-
-      if (loadedKnowledge != null) {
-        knowledge = loadedKnowledge;
-      }
-    } catch (error, stackTrace) {
-      knowledgeError = error;
-
-      _debugLog(
-        'Medicine knowledge loading failed.',
-        error,
-        stackTrace,
-      );
-    }
 
     MedicineTypeInfo? medicineType;
 
@@ -165,7 +201,6 @@ class _MedicineDetailsScreenState extends State<MedicineDetailsScreen> {
       alternatives: List<MedicinePrice>.unmodifiable(
         alternatives,
       ),
-      knowledgeError: knowledgeError,
       alternativesError: alternativesError,
     );
   }
@@ -278,6 +313,10 @@ class _MedicineDetailsScreenState extends State<MedicineDetailsScreen> {
       forceRefresh: true,
     );
 
+    _loadInfo(
+      forceRefresh: true,
+    );
+
     setState(() {
       _isRefreshing = true;
       _future = future;
@@ -286,13 +325,11 @@ class _MedicineDetailsScreenState extends State<MedicineDetailsScreen> {
     try {
       await future;
     } finally {
-      if (!mounted) {
-        return;
+      if (mounted) {
+        setState(() {
+          _isRefreshing = false;
+        });
       }
-
-      setState(() {
-        _isRefreshing = false;
-      });
     }
   }
 
@@ -351,7 +388,7 @@ class _MedicineDetailsScreenState extends State<MedicineDetailsScreen> {
                 : Center(
               child: ConstrainedBox(
                 constraints: const BoxConstraints(
-                  maxWidth: 820,
+                  maxWidth: 1240,
                 ),
                 child: Column(
                   children: [
@@ -394,9 +431,7 @@ class _MedicineDetailsScreenState extends State<MedicineDetailsScreen> {
       child: Row(
         children: [
           _HeaderButton(
-            icon: _isArabic
-                ? Icons.arrow_forward_rounded
-                : Icons.arrow_back_rounded,
+            icon: Icons.arrow_back_rounded,
             onTap: () {
               Navigator.of(context).pop();
             },
@@ -459,7 +494,7 @@ class _MedicineDetailsScreenState extends State<MedicineDetailsScreen> {
     _safeAttachedKnowledge(medicine);
 
     final knowledge =
-        data?.knowledge ?? attachedKnowledge;
+        _info?.knowledge ?? data?.knowledge ?? attachedKnowledge;
 
     MedicineTypeInfo? type =
         data?.medicineType;
@@ -472,101 +507,189 @@ class _MedicineDetailsScreenState extends State<MedicineDetailsScreen> {
     final alternatives =
         data?.alternatives ?? const <MedicinePrice>[];
 
+    final loading =
+        snapshot.connectionState ==
+            ConnectionState.waiting &&
+            data == null;
+
+    final hadKnowledgeError =
+        _infoFailed;
+
+    final infoLoading =
+        _infoLoading;
+
+    final primary = <Widget>[
+      _MedicineHero(
+        medicine: medicine,
+        result: _result,
+        knowledge: knowledge,
+        medicineType: type,
+        isArabic: _isArabic,
+      ),
+      const SizedBox(height: 12),
+      _DetailActions(
+        medicine: medicine,
+        knowledge: knowledge,
+        isArabic: _isArabic,
+      ),
+      const SizedBox(height: 12),
+      if (loading)
+        _LoadingCard(
+          isArabic: _isArabic,
+        )
+      else ...[
+        _OverviewCard(
+          medicine: medicine,
+          result: _result,
+          knowledge: knowledge,
+          medicineType: type,
+          isArabic: _isArabic,
+        ),
+        const SizedBox(height: 12),
+        _OfficialRegistrySection(
+          medicine: medicine,
+          isArabic: _isArabic,
+        ),
+        const SizedBox(height: 12),
+        _EquivalentPricesSection(
+          medicine: medicine,
+          isArabic: _isArabic,
+          onMedicineTap: _openAlternative,
+        ),
+        const SizedBox(height: 12),
+        _AlternativesSection(
+          original: medicine,
+          alternatives: alternatives,
+          hadError: data?.alternativesError != null,
+          isArabic: _isArabic,
+          onMedicineTap: _openAlternative,
+        ),
+      ],
+    ];
+
+    final secondary = loading
+        ? const <Widget>[]
+        : <Widget>[
+      _InfoSourceNote(
+        info: _info,
+        loading: infoLoading,
+        failed: hadKnowledgeError,
+        isArabic: _isArabic,
+        onRetry: () => _loadInfo(forceRefresh: true),
+      ),
+      const SizedBox(height: 12),
+
+      _UsesSection(
+        knowledge: knowledge,
+        hadError: hadKnowledgeError,
+        loading: infoLoading,
+        isArabic: _isArabic,
+      ),
+      const SizedBox(height: 12),
+
+      _HowToUseSection(
+        result: _result,
+        knowledge: knowledge,
+        hadError: hadKnowledgeError,
+        loading: infoLoading,
+        isArabic: _isArabic,
+      ),
+      const SizedBox(height: 12),
+
+      _SideEffectsSection(
+        knowledge: knowledge,
+        hadError: hadKnowledgeError,
+        loading: infoLoading,
+        isArabic: _isArabic,
+      ),
+      const SizedBox(height: 12),
+
+      _SafetySection(
+        knowledge: knowledge,
+        hadError: hadKnowledgeError,
+        loading: infoLoading,
+        isArabic: _isArabic,
+      ),
+      const SizedBox(height: 12),
+
+      _ProductDetailsSection(
+        medicine: medicine,
+        knowledge: knowledge,
+        isArabic: _isArabic,
+      ),
+      const SizedBox(height: 12),
+
+      _SourcesSection(
+        medicine: medicine,
+        knowledge: knowledge,
+        isArabic: _isArabic,
+      ),
+      const SizedBox(height: 14),
+
+      _SafetyFooter(
+        isArabic: _isArabic,
+      ),
+    ];
+
     return RefreshIndicator(
       onRefresh: _refresh,
-      child: ListView(
-        physics: const AlwaysScrollableScrollPhysics(
-          parent: BouncingScrollPhysics(),
-        ),
-        padding: const EdgeInsets.fromLTRB(
-          14,
-          5,
-          14,
-          30,
-        ),
-        children: [
-          _MedicineHero(
-            medicine: medicine,
-            result: _result,
-            knowledge: knowledge,
-            medicineType: type,
-            isArabic: _isArabic,
-          ),
-          const SizedBox(height: 14),
+      child: LayoutBuilder(
+        builder: (
+            context,
+            constraints,
+            ) {
+          final wide =
+              constraints.maxWidth >= 1000;
 
-          if (snapshot.connectionState ==
-              ConnectionState.waiting &&
-              data == null)
-            _LoadingCard(
-              isArabic: _isArabic,
-            )
-          else ...[
-            _OverviewCard(
-              medicine: medicine,
-              result: _result,
-              knowledge: knowledge,
-              medicineType: type,
-              isArabic: _isArabic,
-            ),
-            const SizedBox(height: 12),
+          if (!wide) {
+            return ListView(
+              physics: const AlwaysScrollableScrollPhysics(
+                parent: BouncingScrollPhysics(),
+              ),
+              padding: const EdgeInsets.fromLTRB(
+                14,
+                5,
+                14,
+                96,
+              ),
+              children: [
+                ...primary,
+                const SizedBox(height: 12),
+                ...secondary,
+              ],
+            );
+          }
 
-            _UsesSection(
-              knowledge: knowledge,
-              hadError: data?.knowledgeError != null,
-              isArabic: _isArabic,
+          return SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.fromLTRB(
+              16,
+              5,
+              16,
+              96,
             ),
-            const SizedBox(height: 12),
-
-            _HowToUseSection(
-              result: _result,
-              knowledge: knowledge,
-              hadError: data?.knowledgeError != null,
-              isArabic: _isArabic,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  flex: 11,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: primary,
+                  ),
+                ),
+                const SizedBox(width: 18),
+                Expanded(
+                  flex: 10,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: secondary,
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(height: 12),
-
-            _SideEffectsSection(
-              knowledge: knowledge,
-              hadError: data?.knowledgeError != null,
-              isArabic: _isArabic,
-            ),
-            const SizedBox(height: 12),
-
-            _SafetySection(
-              knowledge: knowledge,
-              hadError: data?.knowledgeError != null,
-              isArabic: _isArabic,
-            ),
-            const SizedBox(height: 12),
-
-            _AlternativesSection(
-              original: medicine,
-              alternatives: alternatives,
-              hadError: data?.alternativesError != null,
-              isArabic: _isArabic,
-              onMedicineTap: _openAlternative,
-            ),
-            const SizedBox(height: 12),
-
-            _ProductDetailsSection(
-              medicine: medicine,
-              knowledge: knowledge,
-              isArabic: _isArabic,
-            ),
-            const SizedBox(height: 12),
-
-            _SourcesSection(
-              medicine: medicine,
-              knowledge: knowledge,
-              isArabic: _isArabic,
-            ),
-            const SizedBox(height: 14),
-
-            _SafetyFooter(
-              isArabic: _isArabic,
-            ),
-          ],
-        ],
+          );
+        },
       ),
     );
   }
@@ -626,7 +749,6 @@ class _MedicineDetailsData {
     this.knowledge,
     this.medicineType,
     this.alternatives = const <MedicinePrice>[],
-    this.knowledgeError,
     this.alternativesError,
   });
 
@@ -634,7 +756,6 @@ class _MedicineDetailsData {
   final MedicineTypeInfo? medicineType;
   final List<MedicinePrice> alternatives;
 
-  final Object? knowledgeError;
   final Object? alternativesError;
 }
 
@@ -933,11 +1054,13 @@ class _UsesSection extends StatelessWidget {
   const _UsesSection({
     required this.knowledge,
     required this.hadError,
+    required this.loading,
     required this.isArabic,
   });
 
   final MedicineKnowledge? knowledge;
   final bool hadError;
+  final bool loading;
   final bool isArabic;
 
   @override
@@ -958,14 +1081,16 @@ class _UsesSection extends StatelessWidget {
           : 'Why is this medicine used?',
       color: PharmaLensColors.info,
       initiallyExpanded: true,
-      child: _ReviewedText(
+      child: loading && uses.isEmpty
+          ? _InfoLoading(isArabic: isArabic)
+          : _ReviewedText(
         value: uses,
         hadError: hadError,
         isArabic: isArabic,
         emptyEn:
-        'Reviewed uses have not been added for this medicine yet.',
+        'Information on the uses of this medicine is not available yet. Ask your pharmacist.',
         emptyAr:
-        'لم تتم إضافة الاستعمالات المراجعة لهذا الدواء بعد.',
+        'معلومات استعمالات هذا الدواء غير متوفرة بعد. اسأل الصيدلي.',
       ),
     );
   }
@@ -976,12 +1101,14 @@ class _HowToUseSection extends StatelessWidget {
     required this.result,
     required this.knowledge,
     required this.hadError,
+    required this.loading,
     required this.isArabic,
   });
 
   final VerifiedMedicineResult? result;
   final MedicineKnowledge? knowledge;
   final bool hadError;
+  final bool loading;
   final bool isArabic;
 
   @override
@@ -1005,9 +1132,63 @@ class _HowToUseSection extends StatelessWidget {
     final prescriptionDirections =
         result?.prescriptionDirections.trim() ?? '';
 
-    final hasAny = howToTake.isNotEmpty ||
-        food.isNotEmpty ||
-        prescriptionDirections.isNotEmpty;
+    // Opened from a scanned prescription.
+    final fromPrescription =
+        result != null;
+
+    final usual = <Widget>[
+      if (howToTake.isNotEmpty)
+        _TextBlock(
+          title: fromPrescription
+              ? (isArabic ? 'كيف يُستعمل عادةً' : 'How it is usually taken')
+              : (isArabic ? 'الاستخدام المعتاد' : 'Usual use'),
+          text: howToTake,
+        ),
+      if (food.isNotEmpty) ...[
+        if (howToTake.isNotEmpty)
+          const SizedBox(height: 13),
+        _TextBlock(
+          title: isArabic
+              ? 'مع الطعام'
+              : 'Food instructions',
+          text: food,
+        ),
+      ],
+    ];
+
+    final children = <Widget>[
+      if (prescriptionDirections.isNotEmpty)
+        _PrescriptionBox(
+          value: prescriptionDirections,
+          isArabic: isArabic,
+        )
+      else if (fromPrescription)
+        _MessageBox(
+          warning: true,
+          text: isArabic
+              ? 'لم تُكتب طريقة الاستعمال على الوصفة. اسأل طبيبك أو الصيدلي كيف تأخذ هذا الدواء.'
+              : 'No directions are written on the prescription. Ask your doctor or pharmacist how to take this medicine.',
+        ),
+      if (usual.isNotEmpty) ...[
+        if (fromPrescription)
+          const SizedBox(height: 13),
+        ...usual,
+      ] else if (loading)
+        Padding(
+          padding: EdgeInsets.only(top: fromPrescription ? 13 : 0),
+          child: _InfoLoading(isArabic: isArabic),
+        )
+      else if (!fromPrescription)
+        _ReviewedText(
+          value: '',
+          hadError: hadError,
+          isArabic: isArabic,
+          emptyEn:
+          "Directions are not available for this medicine yet. Follow your doctor's or pharmacist's directions.",
+          emptyAr:
+          'طريقة الاستعمال غير متوفرة لهذا الدواء بعد. اتبع تعليمات الطبيب أو الصيدلي.',
+        ),
+    ];
 
     return _ExpandableCard(
       icon: Icons.schedule_rounded,
@@ -1016,50 +1197,10 @@ class _HowToUseSection extends StatelessWidget {
           : 'How to use',
       color: const Color(0xFF7457E8),
       initiallyExpanded: true,
-      child: hasAny
-          ? Column(
+      child: Column(
         crossAxisAlignment:
         CrossAxisAlignment.start,
-        children: [
-          if (howToTake.isNotEmpty)
-            _TextBlock(
-              title: isArabic
-                  ? 'الاستخدام العام'
-                  : 'General administration',
-              text: howToTake,
-            ),
-
-          if (food.isNotEmpty) ...[
-            if (howToTake.isNotEmpty)
-              const SizedBox(height: 13),
-            _TextBlock(
-              title: isArabic
-                  ? 'مع الطعام'
-                  : 'Food instructions',
-              text: food,
-            ),
-          ],
-
-          if (prescriptionDirections
-              .isNotEmpty) ...[
-            if (howToTake.isNotEmpty ||
-                food.isNotEmpty)
-              const SizedBox(height: 13),
-            _PrescriptionBox(
-              value: prescriptionDirections,
-              isArabic: isArabic,
-            ),
-          ],
-        ],
-      )
-          : _ReviewedText(
-        value: '',
-        hadError: hadError,
-        isArabic: isArabic,
-        emptyEn:
-        'Reviewed administration instructions have not been added yet.',
-        emptyAr:
-        'لم تتم إضافة تعليمات استخدام مراجعة لهذا الدواء بعد.',
+        children: children,
       ),
     );
   }
@@ -1069,11 +1210,13 @@ class _SideEffectsSection extends StatelessWidget {
   const _SideEffectsSection({
     required this.knowledge,
     required this.hadError,
+    required this.loading,
     required this.isArabic,
   });
 
   final MedicineKnowledge? knowledge;
   final bool hadError;
+  final bool loading;
   final bool isArabic;
 
   @override
@@ -1098,15 +1241,17 @@ class _SideEffectsSection extends StatelessWidget {
           ? 'الأعراض الجانبية'
           : 'Side effects',
       color: PharmaLensColors.warning,
-      child: common.isEmpty && serious.isEmpty
+      child: loading && common.isEmpty && serious.isEmpty
+          ? _InfoLoading(isArabic: isArabic)
+          : common.isEmpty && serious.isEmpty
           ? _ReviewedText(
         value: '',
         hadError: hadError,
         isArabic: isArabic,
         emptyEn:
-        'Reviewed side effects have not been added for this medicine yet.',
+        'Side-effect information is not available for this medicine yet. Read the leaflet in the box.',
         emptyAr:
-        'لم تتم إضافة الأعراض الجانبية المراجعة لهذا الدواء بعد.',
+        'معلومات الأعراض الجانبية غير متوفرة لهذا الدواء بعد. اقرأ النشرة داخل العلبة.',
       )
           : Column(
         crossAxisAlignment:
@@ -1142,11 +1287,13 @@ class _SafetySection extends StatelessWidget {
   const _SafetySection({
     required this.knowledge,
     required this.hadError,
+    required this.loading,
     required this.isArabic,
   });
 
   final MedicineKnowledge? knowledge;
   final bool hadError;
+  final bool loading;
   final bool isArabic;
 
   @override
@@ -1190,15 +1337,17 @@ class _SafetySection extends StatelessWidget {
           ? 'التحذيرات والمعلومات المهمة'
           : 'Warnings & safety',
       color: PharmaLensColors.danger,
-      child: !hasAny
+      child: loading && !hasAny
+          ? _InfoLoading(isArabic: isArabic)
+          : !hasAny
           ? _ReviewedText(
         value: '',
         hadError: hadError,
         isArabic: isArabic,
         emptyEn:
-        'Reviewed warning information has not been added yet.',
+        'Warning information is not available for this medicine yet. Ask your pharmacist.',
         emptyAr:
-        'لم تتم إضافة معلومات التحذير المراجعة لهذا الدواء بعد.',
+        'معلومات التحذيرات غير متوفرة لهذا الدواء بعد. اسأل الصيدلي.',
       )
           : Column(
         crossAxisAlignment:
@@ -1564,11 +1713,7 @@ class _AlternativeTile extends StatelessWidget {
                       ),
                     const SizedBox(height: 8),
                     Icon(
-                      isArabic
-                          ? Icons
-                          .chevron_left_rounded
-                          : Icons
-                          .chevron_right_rounded,
+                      Icons.chevron_right_rounded,
                       color: palette.textMuted,
                       size: 20,
                     ),
@@ -1872,7 +2017,11 @@ class _ExpandableCard extends StatelessWidget {
         data: Theme.of(context).copyWith(
           dividerColor: Colors.transparent,
         ),
-        child: ExpansionTile(
+        // The tile paints its ink on the nearest Material; without this one
+        // the card's colored box would hide it.
+        child: Material(
+          type: MaterialType.transparency,
+          child: ExpansionTile(
           initiallyExpanded: initiallyExpanded,
           tilePadding:
           const EdgeInsets.symmetric(
@@ -1910,6 +2059,7 @@ class _ExpandableCard extends StatelessWidget {
             const SizedBox(height: 12),
             child,
           ],
+          ),
         ),
       ),
     );
@@ -2195,8 +2345,8 @@ class _PrescriptionBox extends StatelessWidget {
               Expanded(
                 child: Text(
                   isArabic
-                      ? 'تعليمات الوصفة'
-                      : 'Prescription directions',
+                      ? 'كما كتب الطبيب على الوصفة'
+                      : 'As written by your doctor',
                   style: TextStyle(
                     color: palette.textPrimary,
                     fontWeight:
@@ -2262,8 +2412,8 @@ class _ReviewedText extends StatelessWidget {
     return _MessageBox(
       text: hadError
           ? (isArabic
-          ? 'تعذر تحميل المعلومات المراجعة حاليًا.'
-          : 'Reviewed information is temporarily unavailable.')
+          ? 'تعذر تحميل هذه المعلومات. اسحب الصفحة للأسفل لإعادة المحاولة.'
+          : 'This information could not be loaded. Pull down to try again.')
           : (isArabic ? emptyAr : emptyEn),
     );
   }
@@ -2385,14 +2535,18 @@ class _HeroBadge extends StatelessWidget {
             color: Colors.white,
           ),
           const SizedBox(width: 5),
-          Text(
-            label,
-            textDirection:
-            _textDirectionFor(label),
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 10.5,
-              fontWeight: FontWeight.w800,
+          Flexible(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textDirection:
+              _textDirectionFor(label),
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 10.5,
+                fontWeight: FontWeight.w800,
+              ),
             ),
           ),
         ],
@@ -2811,4 +2965,450 @@ IconData _medicineIcon(
   }
 
   return Icons.medication_outlined;
+}
+
+/// Read aloud and reminder shortcuts for the current medicine.
+class _DetailActions extends StatelessWidget {
+  const _DetailActions({
+    required this.medicine,
+    required this.knowledge,
+    required this.isArabic,
+  });
+
+  final MedicinePrice medicine;
+  final MedicineKnowledge? knowledge;
+  final bool isArabic;
+
+  static String speechIdFor(MedicinePrice? medicine) => 'medicine:${medicine?.stableKey ?? ''}';
+
+  String get _spokenText {
+    final uses = knowledge?.localizedUses(isArabic: isArabic).trim() ?? '';
+    final howToTake = knowledge?.localizedHowToTake(isArabic: isArabic).trim() ?? '';
+
+    final parts = <String>[
+      medicine.brandName,
+      medicine.displayStrength,
+      medicine.displayDosageForm,
+      if (medicine.activeIngredients.isNotEmpty)
+        (isArabic ? 'المادة الفعالة: ' : 'Active ingredient: ') + medicine.activeIngredients.join(', '),
+      if (uses.isNotEmpty) (isArabic ? 'الاستعمال: ' : 'Used for: ') + uses,
+      if (howToTake.isNotEmpty) (isArabic ? 'طريقة الاستعمال: ' : 'How to take it: ') + howToTake,
+    ].where((part) => part.trim().isNotEmpty && part.trim() != '—');
+    return parts.join('. ');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final speech = SpeechService();
+    final id = speechIdFor(medicine);
+
+    return Wrap(
+      spacing: 10,
+      runSpacing: 10,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        ListenableBuilder(
+          listenable: speech,
+          builder: (context, _) {
+            final active = speech.isActiveFor(id);
+            final playing = active && speech.state == SpeechState.playing;
+            final paused = active && speech.state == SpeechState.paused;
+
+            final button = playing
+                ? FilledButton.tonalIcon(
+                    onPressed: () => speech.toggle(id, _spokenText, isArabic: isArabic),
+                    icon: const Icon(Icons.pause_rounded),
+                    label: Text(isArabic ? 'إيقاف مؤقت' : 'Pause'),
+                  )
+                : OutlinedButton.icon(
+                    onPressed: () async {
+                      final spoke = await speech.toggle(id, _spokenText, isArabic: isArabic);
+                      if (!spoke && context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              isArabic ? 'القراءة الصوتية غير متاحة على هذا الجهاز.' : 'Read aloud is not available on this device.',
+                            ),
+                          ),
+                        );
+                      }
+                    },
+                    icon: Icon(paused ? Icons.play_arrow_rounded : Icons.volume_up_rounded),
+                    label: Text(
+                      paused ? (isArabic ? 'متابعة القراءة' : 'Resume') : (isArabic ? 'اقرأ بصوت عالٍ' : 'Read aloud'),
+                    ),
+                  );
+
+            return Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                button,
+                if (active) ...[
+                  const SizedBox(width: 4),
+                  IconButton(
+                    onPressed: speech.stop,
+                    tooltip: isArabic ? 'إيقاف' : 'Stop',
+                    icon: const Icon(Icons.stop_rounded),
+                  ),
+                ],
+              ],
+            );
+          },
+        ),
+        FilledButton.icon(
+          onPressed: () => showReminderEditor(
+            context,
+            medicineName: medicine.brandName,
+            medicineId: medicine.medicineId,
+          ),
+          icon: const Icon(Icons.alarm_add_rounded),
+          label: Text(isArabic ? 'تذكير بالدواء' : 'Add reminder'),
+        ),
+      ],
+    );
+  }
+}
+
+/// Says where the patient information below comes from, and whether AI wrote
+/// it, so nobody mistakes it for an official leaflet.
+class _InfoSourceNote extends StatelessWidget {
+  const _InfoSourceNote({
+    required this.info,
+    required this.loading,
+    required this.failed,
+    required this.isArabic,
+    required this.onRetry,
+  });
+
+  final MedicineInfo? info;
+  final bool loading;
+  final bool failed;
+  final bool isArabic;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = PharmaLensTheme.paletteOf(context);
+    final info = this.info;
+
+    late final IconData icon;
+    late final Color color;
+    late final String text;
+    Widget? action;
+
+    if (loading) {
+      icon = Icons.downloading_rounded;
+      color = PharmaLensColors.info;
+      text = isArabic
+          ? 'جارٍ تحميل معلومات الدواء (الاستعمال، الأعراض الجانبية، التحذيرات)…'
+          : 'Loading medicine information (uses, side effects, warnings)…';
+    } else if (info == null) {
+      icon = failed ? Icons.cloud_off_rounded : Icons.info_outline_rounded;
+      color = failed ? PharmaLensColors.warning : palette.textMuted;
+      text = failed
+          ? (isArabic ? 'تعذر تحميل معلومات الدواء. تحقق من الاتصال بالإنترنت.' : 'Could not load the medicine information. Check your internet connection.')
+          : (isArabic ? 'لا تتوفر معلومات إضافية عن هذا الدواء حاليًا.' : 'No further information is available for this medicine yet.');
+      if (failed) {
+        action = TextButton(onPressed: onRetry, child: Text(isArabic ? 'إعادة المحاولة' : 'Try again'));
+      }
+    } else {
+      switch (info.origin) {
+        case MedicineInfoOrigin.fdaLabelSummary:
+          icon = Icons.auto_awesome_rounded;
+          color = PharmaLensColors.info;
+          text = isArabic
+              ? 'ملخص بالذكاء الاصطناعي من نشرة إدارة الغذاء والدواء الأمريكية (FDA) لدواء بنفس المادة الفعالة${info.sourceTitle.isEmpty ? '' : ' (${info.sourceTitle})'}. قد يختلف المنتج اللبناني قليلًا، وقد يحتوي الملخص على أخطاء.'
+              : 'AI summary of the U.S. FDA label for the same active ingredient${info.sourceTitle.isEmpty ? '' : ' (${info.sourceTitle})'}. The Lebanese product can differ slightly, and the summary can contain mistakes.';
+        case MedicineInfoOrigin.fdaLabel:
+          icon = Icons.description_outlined;
+          color = PharmaLensColors.teal;
+          text = isArabic
+              ? 'من نشرة إدارة الغذاء والدواء الأمريكية (FDA) لدواء بنفس المادة الفعالة${info.sourceTitle.isEmpty ? '' : ' (${info.sourceTitle})'}، باللغة الإنجليزية.'
+              : 'From the U.S. FDA label for the same active ingredient${info.sourceTitle.isEmpty ? '' : ' (${info.sourceTitle})'}.';
+        case MedicineInfoOrigin.aiGenerated:
+          icon = Icons.auto_awesome_rounded;
+          color = PharmaLensColors.warning;
+          text = isArabic
+              ? 'كُتبت هذه المعلومات بالذكاء الاصطناعي لعدم توفر نشرة رسمية. قد تحتوي على أخطاء، فتأكد منها مع الصيدلي أو من النشرة داخل العلبة.'
+              : 'Written by AI because no official leaflet was found. It can contain mistakes: check it with your pharmacist or the leaflet in the box.';
+      }
+      final url = Uri.tryParse(info.sourceUrl);
+      if (url != null && info.sourceUrl.isNotEmpty) {
+        action = TextButton(
+          onPressed: () => launchUrl(url, mode: LaunchMode.externalApplication),
+          child: Text(isArabic ? 'فتح النشرة' : 'Open label'),
+        );
+      }
+    }
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 12, 10, 12),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: PharmaLensTheme.isDark(context) ? 0.14 : 0.08),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
+      ),
+      child: Row(
+        children: [
+          if (loading)
+            SizedBox(
+              width: 20,
+              height: 20,
+              child: CircularProgressIndicator(strokeWidth: 2.4, color: color),
+            )
+          else
+            Icon(icon, color: color, size: 20),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              text,
+              style: TextStyle(color: palette.textPrimary, fontSize: 12.3, height: 1.45, fontWeight: FontWeight.w600),
+            ),
+          ),
+          if (action != null) action,
+        ],
+      ),
+    );
+  }
+}
+
+class _InfoLoading extends StatelessWidget {
+  const _InfoLoading({required this.isArabic});
+
+  final bool isArabic;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = PharmaLensTheme.paletteOf(context);
+
+    return Row(
+      children: [
+        const SizedBox(
+          width: 16,
+          height: 16,
+          child: CircularProgressIndicator(strokeWidth: 2),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(
+            isArabic ? 'جارٍ التحميل…' : 'Loading…',
+            style: TextStyle(color: palette.textMuted, fontSize: 12.5, fontWeight: FontWeight.w600),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// What the official MOPH registry says: ingredients and WHO ATC group.
+class _OfficialRegistrySection extends StatelessWidget {
+  const _OfficialRegistrySection({
+    required this.medicine,
+    required this.isArabic,
+  });
+
+  final MedicinePrice medicine;
+  final bool isArabic;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = PharmaLensTheme.paletteOf(context);
+    final group = AtcGroups.describe(medicine.atcCode);
+    final anatomical = AtcGroups.anatomicalGroup(medicine.atcCode);
+    final moph = MophMedicineService();
+
+    final rows = <(String, String)>[
+      if (medicine.activeIngredients.isNotEmpty)
+        (isArabic ? 'المادة الفعالة' : 'Active ingredients', medicine.activeIngredients.join('\n')),
+      if (group != null)
+        (
+          isArabic ? 'الفئة العلاجية' : 'Therapeutic group',
+          [
+            group.localized(isArabic: isArabic),
+            if (anatomical != null && anatomical.code != group.code) anatomical.localized(isArabic: isArabic),
+          ].join(' · '),
+        ),
+      if ((medicine.atcCode ?? '').trim().isNotEmpty) ('ATC', medicine.atcCode!.trim()),
+      if (medicine.formattedPriceLbp.isNotEmpty)
+        (
+          isArabic ? 'السعر الرسمي' : 'Official price',
+          '${medicine.formattedPriceLbp} ${isArabic ? 'ل.ل.' : 'LBP'}'
+              '${moph.lastUpdatedDate.isEmpty ? '' : isArabic ? ' (لائحة ${moph.lastUpdatedDate})' : ' (list of ${moph.lastUpdatedDate})'}',
+        ),
+    ];
+
+    if (rows.isEmpty) return const SizedBox.shrink();
+
+    return SurfaceCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SectionTitle(
+            icon: Icons.verified_outlined,
+            title: isArabic ? 'من سجل وزارة الصحة' : 'From the MOPH registry',
+            subtitle: isArabic ? 'بيانات رسمية، وليست نصيحة طبية' : 'Official data, not medical advice',
+          ),
+          const SizedBox(height: 12),
+          for (final row in rows)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SizedBox(
+                    width: 130,
+                    child: Text(row.$1, style: TextStyle(color: palette.textMuted, fontSize: 12)),
+                  ),
+                  Expanded(
+                    child: SelectableText(
+                      row.$2,
+                      style: TextStyle(color: palette.textPrimary, fontWeight: FontWeight.w700, height: 1.4),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          if (moph.isDataStale)
+            Text(
+              isArabic
+                  ? 'قد يكون هذا السعر قديمًا. تحقق منه في الصيدلية.'
+                  : 'This price may be out of date. Confirm it at the pharmacy.',
+              style: const TextStyle(color: PharmaLensColors.warning, fontSize: 12, fontWeight: FontWeight.w700),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Same ingredients, strength and form from other manufacturers, cheapest first.
+class _EquivalentPricesSection extends StatelessWidget {
+  const _EquivalentPricesSection({
+    required this.medicine,
+    required this.isArabic,
+    required this.onMedicineTap,
+  });
+
+  final MedicinePrice medicine;
+  final bool isArabic;
+  final void Function(MedicinePrice medicine) onMedicineTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = PharmaLensTheme.paletteOf(context);
+
+    return FutureBuilder<List<MedicinePrice>>(
+      future: MophMedicineService().findExactAlternatives(medicine, limit: 8),
+      builder: (context, snapshot) {
+        final equivalents = snapshot.data ?? const <MedicinePrice>[];
+        if (equivalents.isEmpty) return const SizedBox.shrink();
+
+        return SurfaceCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              SectionTitle(
+                icon: Icons.savings_outlined,
+                title: isArabic ? 'نفس الدواء بأسعار أخرى' : 'Same medicine, other prices',
+                subtitle: isArabic
+                    ? 'نفس المادة والتركيز والشكل الصيدلاني، من الأرخص إلى الأغلى'
+                    : 'Same ingredient, strength and form, cheapest first',
+              ),
+              const SizedBox(height: 10),
+              for (final equivalent in equivalents)
+                _EquivalentTile(
+                  medicine: equivalent,
+                  original: medicine,
+                  isArabic: isArabic,
+                  onTap: () => onMedicineTap(equivalent),
+                ),
+              const SizedBox(height: 6),
+              Text(
+                isArabic
+                    ? 'لا تستبدل دواءك قبل استشارة الطبيب أو الصيدلي، حتى لو كانت المادة نفسها.'
+                    : 'Do not switch before asking your doctor or pharmacist, even when the ingredient is the same.',
+                style: TextStyle(color: palette.textMuted, fontSize: 11.5, height: 1.4),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _EquivalentTile extends StatelessWidget {
+  const _EquivalentTile({
+    required this.medicine,
+    required this.original,
+    required this.isArabic,
+    required this.onTap,
+  });
+
+  final MedicinePrice medicine;
+  final MedicinePrice original;
+  final bool isArabic;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = PharmaLensTheme.paletteOf(context);
+    final price = medicine.priceLbp;
+    final saving = MedicineEquivalence.savingPercent(original, medicine);
+    final perUnit = MedicineEquivalence.unitPrice(medicine);
+    final unit = MedicineEquivalence.packQuantity(medicine.packSize)?.$2;
+
+    // A ListTile caps the trailing area at its own height, which clips the
+    // third price line; this row grows with its content instead.
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 9),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    medicine.brandName,
+                    textDirection: TextDirection.ltr,
+                    style: TextStyle(color: palette.textPrimary, fontWeight: FontWeight.w800, fontSize: 15),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    [medicine.displayPackSize, medicine.displayManufacturer].where((v) => v.trim().isNotEmpty && v != '—').join(' · '),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: palette.textSecondary, fontSize: 12),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 12),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(
+                  price == null ? '—' : '${medicine.formattedPriceLbp} ${isArabic ? 'ل.ل.' : 'LBP'}',
+                  style: TextStyle(color: palette.textPrimary, fontWeight: FontWeight.w900),
+                ),
+                if (perUnit != null && unit == 'unit')
+                  Text(
+                    isArabic ? '${formatCount(perUnit.round())} ل.ل. للوحدة' : '${formatCount(perUnit.round())} LBP each',
+                    style: TextStyle(color: palette.textMuted, fontSize: 11),
+                  ),
+                if (saving != null && saving > 0)
+                  Text(
+                    isArabic ? 'أرخص بـ $saving٪ للكمية نفسها' : '$saving% cheaper per dose',
+                    style: const TextStyle(color: PharmaLensColors.success, fontSize: 11.5, fontWeight: FontWeight.w800),
+                  ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }

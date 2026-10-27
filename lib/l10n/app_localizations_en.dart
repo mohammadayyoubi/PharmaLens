@@ -164,4 +164,10 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get medicalDisclaimer =>
       'PharmaLens provides informational support and does not replace a doctor or pharmacist.';
+
+  @override
+  String get prescriptionAnalysis => 'Prescription analysis';
+
+  @override
+  String get tryAgain => 'Try again';
 }

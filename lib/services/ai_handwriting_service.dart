@@ -1,12 +1,11 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 import '../models/ai_handwriting_result.dart';
-import '../private/api_keys.dart';
+import 'gemini_client.dart';
 
 enum AiHandwritingErrorCode {
   invalidImage,
@@ -37,105 +36,21 @@ class AiHandwritingException implements Exception {
 }
 
 class AiHandwritingService {
-  static const String _apiKeysFromTerminal =
-  String.fromEnvironment(
-    'GEMINI_API_KEYS',
-  );
-
-  static const String _singleApiKeyFromTerminal =
-  String.fromEnvironment(
-    'GEMINI_API_KEY',
-  );
-
-  static const String _modelFromTerminal =
-  String.fromEnvironment(
-    'GEMINI_MODEL',
-    defaultValue: '',
-  );
-
   static const int _maximumImageBytes =
       12 * 1024 * 1024;
 
+  /// Longest wait for one Gemini request. Answers normally take 2-20 s; a
+  /// model that is overloaded can hang, so fail over to the next one early.
   static const Duration _requestTimeout =
   Duration(
-    seconds: 90,
+    seconds: 35,
   );
 
-  List<String> _getApiKeys() {
-    final keys = <String>[];
-
-    keys.addAll(
-      GeminiPrivateConfig.geminiApiKeys
-          .map(
-            (key) => key.trim(),
-      )
-          .where(
-            (key) => key.isNotEmpty,
-      )
-          .where(
-            (key) =>
-        key !=
-            'PASTE_YOUR_NEW_GEMINI_API_KEY_HERE' &&
-            key !=
-                'PASTE_YOUR_GEMINI_KEY_HERE' &&
-            key !=
-                'YOUR_API_KEY_HERE',
-      ),
-    );
-
-    if (_apiKeysFromTerminal
-        .trim()
-        .isNotEmpty) {
-      keys.addAll(
-        _apiKeysFromTerminal
-            .split(',')
-            .map(
-              (key) => key.trim(),
-        )
-            .where(
-              (key) => key.isNotEmpty,
-        ),
-      );
-    }
-
-    if (_singleApiKeyFromTerminal
-        .trim()
-        .isNotEmpty) {
-      keys.add(
-        _singleApiKeyFromTerminal.trim(),
-      );
-    }
-
-    return keys
-        .toSet()
-        .toList();
-  }
-
-  List<String> _getModels() {
-    final models = <String>[];
-
-    if (_modelFromTerminal
-        .trim()
-        .isNotEmpty) {
-      models.add(
-        _modelFromTerminal.trim(),
-      );
-    }
-
-    models.addAll(
-      GeminiPrivateConfig.geminiModels
-          .map(
-            (model) => model.trim(),
-      )
-          .where(
-            (model) => model.isNotEmpty,
-      ),
-    );
-
-    return models
-        .toSet()
-        .toList();
-  }
+  /// Longest wait for the whole reading, across every model fallback.
+  static const Duration _totalBudget =
+  Duration(
+    seconds: 100,
+  );
 
   Future<AiHandwritingResult>
   analyzePrescriptionImage({
@@ -152,17 +67,17 @@ class AiHandwritingService {
     );
 
     final apiKeys =
-    _getApiKeys();
+        GeminiClient.apiKeys;
 
     final models =
-    _getModels();
+        GeminiClient.models;
 
     if (apiKeys.isEmpty) {
       throw const AiHandwritingException(
         code:
         AiHandwritingErrorCode.authenticationUnavailable,
         message:
-        'Gemini API configuration is missing.',
+        'Prescription reading is not set up yet: a Gemini API key is missing.',
         retryable: false,
       );
     }
@@ -177,16 +92,32 @@ class AiHandwritingService {
       );
     }
 
+    final deadline =
+    DateTime.now().add(
+      _totalBudget,
+    );
+
     Object? lastError;
 
+    modelLoop:
     for (final model in models) {
       for (
       var keyIndex = 0;
       keyIndex < apiKeys.length;
       keyIndex++
       ) {
+        if (deadline.difference(DateTime.now()) <
+            const Duration(seconds: 5)) {
+          lastError ??= TimeoutException(
+            'Prescription reading timed out.',
+          );
+          break modelLoop;
+        }
+
         try {
           return await _sendWithRecovery(
+            deadline:
+            deadline,
             apiKey:
             apiKeys[keyIndex],
             keyIndex:
@@ -218,6 +149,9 @@ class AiHandwritingService {
     error,
     stackTrace,
     );
+
+    // A timeout is not specific to a key; try the next model.
+    continue modelLoop;
     } catch (
     error,
     stackTrace
@@ -279,7 +213,7 @@ class AiHandwritingService {
     code:
     AiHandwritingErrorCode.timeout,
     message:
-    'Prescription analysis took too long. Please try again.',
+    'Prescription reading took too long. Check your internet connection and try again.',
     );
     }
 
@@ -310,6 +244,7 @@ class AiHandwritingService {
 
   Future<AiHandwritingResult>
   _sendWithRecovery({
+    required DateTime deadline,
     required String apiKey,
     required int keyIndex,
     required String model,
@@ -325,6 +260,8 @@ class AiHandwritingService {
     try {
       final primaryResult =
       await _makeGeminiRequest(
+        deadline:
+        deadline,
         apiKey:
         apiKey,
         keyIndex:
@@ -349,7 +286,7 @@ class AiHandwritingService {
         schema:
         _transcriptionResponseSchema(),
         maxOutputTokens:
-        3600,
+        8192,
       );
 
       if (primaryResult
@@ -370,6 +307,8 @@ class AiHandwritingService {
     try {
       final recoveryResult =
       await _makeGeminiRequest(
+        deadline:
+        deadline,
         apiKey:
         apiKey,
         keyIndex:
@@ -390,7 +329,7 @@ class AiHandwritingService {
         schema:
         _transcriptionResponseSchema(),
         maxOutputTokens:
-        2600,
+        6144,
       );
 
       if (recoveryResult
@@ -435,6 +374,7 @@ class AiHandwritingService {
 
   Future<AiHandwritingResult>
   _makeGeminiRequest({
+    required DateTime deadline,
     required String apiKey,
     required int keyIndex,
     required String model,
@@ -451,6 +391,23 @@ class AiHandwritingService {
       'models/',
       '',
     );
+
+    final remaining =
+    deadline.difference(
+      DateTime.now(),
+    );
+
+    if (remaining <
+        const Duration(seconds: 3)) {
+      throw TimeoutException(
+        'Prescription reading timed out.',
+      );
+    }
+
+    final timeout =
+    remaining < _requestTimeout
+        ? remaining
+        : _requestTimeout;
 
     final uri =
     Uri.parse(
@@ -500,23 +457,19 @@ class AiHandwritingService {
             },
           ],
           'generationConfig':
-          <String, dynamic>{
-            'temperature':
-            0.0,
-            'candidateCount':
-            1,
-            'maxOutputTokens':
+          GeminiClient.generationConfig(
+            model:
+            cleanModel,
+            maxOutputTokens:
             maxOutputTokens,
-            'responseMimeType':
-            'application/json',
-            'responseSchema':
+            responseSchema:
             schema,
-          },
+          ),
         },
       ),
     )
         .timeout(
-      _requestTimeout,
+      timeout,
     );
 
     if (response.statusCode <
@@ -548,7 +501,7 @@ class AiHandwritingService {
     );
 
     final outputText =
-    _extractGeminiOutputText(
+    GeminiClient.extractText(
       decoded,
     );
 
@@ -1145,120 +1098,6 @@ $ocrText
         lower.contains(
           'timed out',
         );
-  }
-
-  String _extractGeminiOutputText(
-      Map<String, dynamic> decoded,
-      ) {
-    final candidates =
-    decoded['candidates'];
-
-    if (candidates is List &&
-        candidates.isNotEmpty) {
-      final firstCandidateValue =
-          candidates.first;
-
-      if (firstCandidateValue
-      is Map) {
-        final firstCandidate =
-        Map<String, dynamic>.from(
-          firstCandidateValue,
-        );
-
-        final contentValue =
-        firstCandidate['content'];
-
-        if (contentValue is Map) {
-          final content =
-          Map<String, dynamic>.from(
-            contentValue,
-          );
-
-          final parts =
-          content['parts'];
-
-          if (parts is List) {
-            final buffer =
-            StringBuffer();
-
-            for (final partValue
-            in parts) {
-              if (partValue
-              is! Map) {
-                continue;
-              }
-
-              final part =
-              Map<String, dynamic>.from(
-                partValue,
-              );
-
-              final text =
-              part['text'];
-
-              if (text != null) {
-                buffer.write(
-                  text.toString(),
-                );
-              }
-            }
-
-            final result =
-            buffer
-                .toString()
-                .trim();
-
-            if (result.isNotEmpty) {
-              return result;
-            }
-          }
-        }
-
-        final finishReason =
-        firstCandidate[
-        'finishReason'
-        ];
-
-        if (finishReason !=
-            null) {
-          throw Exception(
-            'Gemini returned no text. '
-                'Finish reason: '
-                '$finishReason',
-          );
-        }
-      }
-    }
-
-    final promptFeedback =
-    decoded['promptFeedback'];
-
-    if (promptFeedback is Map) {
-      final blockReason =
-      promptFeedback[
-      'blockReason'
-      ];
-
-      if (blockReason != null) {
-        throw Exception(
-          'Gemini blocked the request: '
-              '$blockReason',
-        );
-      }
-    }
-
-    final error =
-    decoded['error'];
-
-    if (error != null) {
-      throw Exception(
-        'Gemini error: $error',
-      );
-    }
-
-    throw Exception(
-      'No text output returned from Gemini.',
-    );
   }
 
   Map<String, dynamic> _extractJson(

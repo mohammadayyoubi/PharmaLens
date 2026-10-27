@@ -15,7 +15,7 @@ class MedicinePrice {
     required this.currency,
     required this.effectiveDate,
     required this.similarityScore,
-    this.dataSource = 'supabase',
+    this.dataSource = 'json',
     this.activeIngredients = const <String>[],
     this.route,
     this.atcCode,
@@ -123,7 +123,7 @@ class MedicinePrice {
       ) {
     return _fromMap(
       json,
-      defaultDataSource: 'supabase',
+      defaultDataSource: 'json',
       unknownBrandFallback: 'Unknown medicine',
     );
   }
@@ -814,9 +814,7 @@ class MedicinePrice {
       return 'Official medicine database';
     }
 
-    if (source == 'supabase' ||
-        source == 'supabase_v3' ||
-        source == 'online') {
+    if (source == 'online') {
       return 'Online medicine database';
     }
 
