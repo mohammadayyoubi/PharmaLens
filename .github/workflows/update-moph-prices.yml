@@ -53,7 +53,14 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add assets/medicines/lebanon_medicine_prices.csv assets/medicines/lebanon_medicine_prices.json
           git commit -m "data: MOPH price list ${{ steps.update.outputs.version }}"
-          git push
+          # main may have moved while the job ran (someone pushed); replay the
+          # data commit on top of it instead of failing.
+          for attempt in 1 2 3; do
+            git pull --rebase origin "${GITHUB_REF_NAME}" && git push && exit 0
+            echo "Push attempt $attempt failed; retrying."
+            sleep $((attempt * 10))
+          done
+          exit 1
 
       # Optional: if this repository is private, the app cannot download from
       # it. Set the repository variable DATA_REPO (e.g. "owner/PharmaLens-data",

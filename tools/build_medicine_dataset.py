@@ -218,7 +218,9 @@ def main():
             row["last_updated"] = row["last_updated"] or list_date
 
     with open(args.output, "w", encoding="utf-8", newline="") as handle:
-        writer = csv.DictWriter(handle, fieldnames=COLUMNS)
+        # "\n" on every OS: the default "\r\n" made a rebuild on Linux (GitHub
+        # Actions) look like every line changed.
+        writer = csv.DictWriter(handle, fieldnames=COLUMNS, lineterminator="\n")
         writer.writeheader()
         writer.writerows(output_rows)
 

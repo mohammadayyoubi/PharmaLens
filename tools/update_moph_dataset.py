@@ -94,6 +94,15 @@ def summarize(csv_path):
     return len(rows), with_ingredients, list_date
 
 
+def read_normalized(path):
+    """File text with line endings unified, or None if it does not exist."""
+    try:
+        with open(path, encoding="utf-8", newline="") as handle:
+            return handle.read().replace("\r\n", "\n")
+    except OSError:
+        return None
+
+
 def sha256(path):
     digest = hashlib.sha256()
     with open(path, "rb") as handle:
@@ -160,6 +169,12 @@ def main():
             problems.append(f"only {with_ingredients}/{rows} medicines have ingredients")
         if problems:
             raise SystemExit("New list rejected: " + "; ".join(problems))
+
+        if read_normalized(new_csv) == read_normalized(CSV_PATH):
+            # Same sheet rebuilt (e.g. a forced run): nothing for phones to download.
+            print("The rebuilt list is identical to the current one; nothing to commit.", file=sys.stderr)
+            set_output(changed="false", version=current.get("version", ""))
+            return
 
         shutil.copyfile(new_csv, CSV_PATH)
     finally:
