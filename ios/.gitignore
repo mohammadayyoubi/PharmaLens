@@ -33,5 +33,3 @@ Runner/GeneratedPluginRegistrant.*
 !default.pbxuser
 !default.perspectivev3
 
-# Local Maps key, see Flutter/Secrets.example.xcconfig
-Flutter/Secrets.xcconfig

@@ -1,23 +1,8 @@
-import java.io.FileInputStream
-import java.util.Properties
-
 plugins {
     id("com.android.application")
     id("kotlin-android")
     id("dev.flutter.flutter-gradle-plugin")
 }
-
-val localProperties = Properties()
-val localPropertiesFile = rootProject.file("local.properties")
-
-if (localPropertiesFile.exists()) {
-    FileInputStream(localPropertiesFile).use { input ->
-        localProperties.load(input)
-    }
-}
-
-val mapsApiKey: String =
-    localProperties.getProperty("MAPS_API_KEY") ?: ""
 
 android {
     namespace = "com.codepeakstudio.pharmalens"
@@ -44,8 +29,6 @@ android {
 
         versionCode = flutter.versionCode
         versionName = flutter.versionName
-
-        manifestPlaceholders["MAPS_API_KEY"] = mapsApiKey
     }
 
     buildTypes {

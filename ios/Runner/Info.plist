@@ -47,8 +47,6 @@
 			</array>
 		</dict>
 	</dict>
-	<key>GMSApiKey</key>
-	<string>$(MAPS_API_KEY)</string>
 	<key>NSCameraUsageDescription</key>
 	<string>PharmaLens uses the camera to photograph prescriptions for reading. / يستخدم فارما لينس الكاميرا لتصوير الوصفات الطبية.</string>
 	<key>NSPhotoLibraryUsageDescription</key>

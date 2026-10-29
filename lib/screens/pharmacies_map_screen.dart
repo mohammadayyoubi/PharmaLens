@@ -1,7 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../models/nearby_healthcare_place.dart';
@@ -26,93 +25,15 @@ class _PharmaciesMapScreenState extends State<PharmaciesMapScreen> {
 
   static const int _maximumPlaces = 8;
 
-  static const LatLng _beirutFallback =
-  LatLng(
+  static const MapCoordinates _beirutFallback =
+  MapCoordinates(
     33.8938,
     35.5018,
   );
 
-  static const String _mapStyleLight = '''
-[
-  {
-    "featureType": "poi",
-    "elementType": "all",
-    "stylers": [{"visibility": "off"}]
-  },
-  {
-    "featureType": "transit",
-    "elementType": "labels.icon",
-    "stylers": [{"visibility": "off"}]
-  },
-  {
-    "featureType": "administrative.land_parcel",
-    "elementType": "labels",
-    "stylers": [{"visibility": "off"}]
-  }
-]
-''';
-
-  static const String _mapStyleDark = '''
-[
-  {
-    "elementType": "geometry",
-    "stylers": [{"color": "#071D28"}]
-  },
-  {
-    "elementType": "labels.text.fill",
-    "stylers": [{"color": "#B7CED8"}]
-  },
-  {
-    "elementType": "labels.text.stroke",
-    "stylers": [{"color": "#061B27"}]
-  },
-  {
-    "featureType": "administrative",
-    "elementType": "geometry",
-    "stylers": [{"color": "#1B4C60"}]
-  },
-  {
-    "featureType": "poi",
-    "elementType": "all",
-    "stylers": [{"visibility": "off"}]
-  },
-  {
-    "featureType": "road",
-    "elementType": "geometry",
-    "stylers": [{"color": "#12384A"}]
-  },
-  {
-    "featureType": "road",
-    "elementType": "geometry.stroke",
-    "stylers": [{"color": "#082230"}]
-  },
-  {
-    "featureType": "road",
-    "elementType": "labels.text.fill",
-    "stylers": [{"color": "#9CB4BE"}]
-  },
-  {
-    "featureType": "transit",
-    "elementType": "all",
-    "stylers": [{"visibility": "off"}]
-  },
-  {
-    "featureType": "water",
-    "elementType": "geometry",
-    "stylers": [{"color": "#05202D"}]
-  },
-  {
-    "featureType": "water",
-    "elementType": "labels.text.fill",
-    "stylers": [{"color": "#7FA0AE"}]
-  }
-]
-''';
-
   final NearbyHealthcareService _service =
   NearbyHealthcareService();
 
-  GoogleMapController? _mapController;
   final UniversalMapController _universalMapController = UniversalMapController();
 
   Position? _userPosition;
@@ -121,9 +42,6 @@ class _PharmaciesMapScreenState extends State<PharmaciesMapScreen> {
 
   List<NearbyHealthcarePlace> _places =
   const <NearbyHealthcarePlace>[];
-
-  Set<Marker> _markers =
-  const <Marker>{};
 
   bool _isLoading = true;
 
@@ -299,10 +217,6 @@ class _PharmaciesMapScreenState extends State<PharmaciesMapScreen> {
           nearest,
         );
 
-        _markers =
-            _buildMarkers(
-              nearest,
-            );
 
         _isLoading =
         false;
@@ -577,60 +491,6 @@ class _PharmaciesMapScreenState extends State<PharmaciesMapScreen> {
     }
   }
 
-  Set<Marker> _buildMarkers(
-      List<NearbyHealthcarePlace> places,
-      ) {
-    return places.map(
-          (
-          place,
-          ) {
-        final selected =
-            _selectedPlace?.id ==
-                place.id;
-
-        final hue =
-        selected
-            ? BitmapDescriptor
-            .hueOrange
-            : place
-            .isPharmacy
-            ? BitmapDescriptor
-            .hueAzure
-            : BitmapDescriptor
-            .hueViolet;
-
-        return Marker(
-          markerId:
-          MarkerId(
-            place.id,
-          ),
-          position:
-          LatLng(
-            place.latitude,
-            place.longitude,
-          ),
-          icon:
-          BitmapDescriptor
-              .defaultMarkerWithHue(
-            hue,
-          ),
-          infoWindow:
-          InfoWindow(
-            title:
-            place.name,
-            snippet:
-            '${_kindLabel(place)} • ${_distanceLabel(place)}',
-          ),
-          onTap: () {
-            _selectPlace(
-              place,
-            );
-          },
-        );
-      },
-    ).toSet();
-  }
-
   void _selectPlace(
       NearbyHealthcarePlace place,
       ) {
@@ -642,28 +502,12 @@ class _PharmaciesMapScreenState extends State<PharmaciesMapScreen> {
       _selectedPlace =
           place;
 
-      _markers =
-          _buildMarkers(
-            _places,
-          );
     });
 
     _universalMapController.animateTo(
       place.latitude,
       place.longitude,
       zoom: 16,
-    );
-
-    _mapController
-        ?.animateCamera(
-      CameraUpdate
-          .newLatLngZoom(
-        LatLng(
-          place.latitude,
-          place.longitude,
-        ),
-        16,
-      ),
     );
   }
 
@@ -677,10 +521,6 @@ class _PharmaciesMapScreenState extends State<PharmaciesMapScreen> {
       _selectedPlace =
       null;
 
-      _markers =
-          _buildMarkers(
-            _places,
-          );
     });
   }
 
@@ -697,36 +537,6 @@ class _PharmaciesMapScreenState extends State<PharmaciesMapScreen> {
       position.longitude,
       zoom: 14.5,
     );
-
-    final controller =
-        _mapController;
-
-    if (controller == null) {
-      return;
-    }
-
-    try {
-      await controller
-          .animateCamera(
-        CameraUpdate
-            .newLatLngZoom(
-          LatLng(
-            position.latitude,
-            position.longitude,
-          ),
-          14.5,
-        ),
-      );
-    } catch (
-    error,
-    stackTrace
-    ) {
-      _debugLog(
-        'Map recenter failed.',
-        error,
-        stackTrace,
-      );
-    }
   }
 
   double _distanceTo(
@@ -1372,7 +1182,6 @@ class _PharmaciesMapScreenState extends State<PharmaciesMapScreen> {
             palette.surface,
             onPressed: () {
               _universalMapController.zoomIn();
-              _mapController?.animateCamera(CameraUpdate.zoomIn());
             },
           ),
 
@@ -1392,7 +1201,6 @@ class _PharmaciesMapScreenState extends State<PharmaciesMapScreen> {
             palette.surface,
             onPressed: () {
               _universalMapController.zoomOut();
-              _mapController?.animateCamera(CameraUpdate.zoomOut());
             },
           ),
 
@@ -1738,8 +1546,6 @@ class _PharmaciesMapScreenState extends State<PharmaciesMapScreen> {
   void dispose() {
     _requestSerial++;
 
-    _mapController?.dispose();
-
     _service.dispose();
 
     super.dispose();
@@ -1754,31 +1560,17 @@ class _PharmaciesMapScreenState extends State<PharmaciesMapScreen> {
       context,
     );
 
-    final isDark =
-    PharmaLensTheme.isDark(
-      context,
-    );
-
     final userPosition =
         _userPosition;
 
-    final target =
-    userPosition == null
+    // OpenStreetMap on every platform: Google's map SDK needs a billing
+    // account, which is not available to us.
+    final initialCenter = userPosition == null
         ? _beirutFallback
-        : LatLng(
-      userPosition.latitude,
-      userPosition.longitude,
-    );
-
-    final isUniversal = kIsWeb ||
-        defaultTargetPlatform == TargetPlatform.windows ||
-        defaultTargetPlatform == TargetPlatform.linux ||
-        defaultTargetPlatform == TargetPlatform.macOS;
-
-    final initialCenter = MapCoordinates(
-      target.latitude,
-      target.longitude,
-    );
+        : MapCoordinates(
+            userPosition.latitude,
+            userPosition.longitude,
+          );
 
     final userCoords = userPosition == null
         ? null
@@ -1792,82 +1584,18 @@ class _PharmaciesMapScreenState extends State<PharmaciesMapScreen> {
       floatingActionButton: const FloatingChatbotButton(),
       body: Stack(
         children: [
-          if (isUniversal)
-            RepaintBoundary(
-              child: UniversalHealthcareMapView(
-                controller: _universalMapController,
-                initialCenter: initialCenter,
-                userLocation: userCoords,
-                places: _places,
-                selectedPlace: _selectedPlace,
-                initialZoom: userPosition == null ? 10.5 : 14.5,
-                onPlaceSelected: _selectPlace,
-                onMapTap: _clearSelectedPlace,
-              ),
-            )
-          else
-            RepaintBoundary(
-              child: GoogleMap(
-                initialCameraPosition:
-                CameraPosition(
-                  target:
-                  target,
-                  zoom:
-                  userPosition ==
-                      null
-                      ? 10
-                      : 14.5,
-                ),
-                style:
-                isDark
-                    ? _mapStyleDark
-                    : _mapStyleLight,
-                markers:
-                _markers,
-                myLocationEnabled:
-                userPosition !=
-                    null,
-                myLocationButtonEnabled:
-                false,
-                mapType:
-                MapType.normal,
-                compassEnabled:
-                false,
-                mapToolbarEnabled:
-                false,
-                zoomControlsEnabled:
-                false,
-                trafficEnabled:
-                false,
-                buildingsEnabled:
-                false,
-                indoorViewEnabled:
-                false,
-                tiltGesturesEnabled:
-                false,
-                padding:
-                const EdgeInsets.only(
-                  top:
-                  100,
-                  bottom:
-                  275,
-                ),
-                onMapCreated:
-                    (
-                    controller,
-                    ) {
-                  _mapController =
-                      controller;
-
-                  _moveToUser();
-                },
-                onTap: (
-                    _,
-                    ) {
-                  _clearSelectedPlace();
-                },
-              ),
+          RepaintBoundary(
+            child: UniversalHealthcareMapView(
+              controller: _universalMapController,
+              initialCenter: initialCenter,
+              userLocation: userCoords,
+              places: _places,
+              selectedPlace: _selectedPlace,
+              initialZoom: userPosition == null ? 10.5 : 14.5,
+              onPlaceSelected: _selectPlace,
+              onMapTap: _clearSelectedPlace,
             ),
+          ),
 
           _buildHeader(),
 

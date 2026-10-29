@@ -2,3 +2,6 @@
 # one line ending everywhere keeps its diffs limited to real price changes.
 assets/medicines/*.csv text eol=lf
 assets/medicines/*.json text eol=lf
+
+# Git hooks are shell scripts; CRLF would break them on macOS/Linux.
+.githooks/* text eol=lf

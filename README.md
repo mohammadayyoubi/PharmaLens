@@ -139,7 +139,7 @@ PharmaLens Architecture
      ];
    }
    ```
-   *(Optional)* Configure Google Places/Maps key in `lib/private/google_maps_private_config.dart`.
+   *(Optional)* Configure a Google Places key in `lib/private/google_maps_private_config.dart` (nearby pharmacies). The map itself is OpenStreetMap and needs no key.
 
 4. **Run the application:**
    - **Chrome / Web:**

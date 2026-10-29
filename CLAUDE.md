@@ -25,7 +25,7 @@ python tools/update_moph_dataset.py      # fetch the newest MOPH sheet and rebui
 
 ## Secrets
 
-`lib/private/*.dart` is git-ignored. Copy the committed `*.example.dart` templates. The Android Maps key goes in `android/local.properties` (`MAPS_API_KEY=`) and the iOS one in `ios/Flutter/Secrets.xcconfig`; both files are ignored. Never print key values or commit them.
+`lib/private/*.dart` is git-ignored. Copy the committed `*.example.dart` templates. Run `git config core.hooksPath .githooks` once per clone: the pre-commit hook blocks any staged Google/Gemini key (the repo is public). For CI or Play Store builds on another machine, pass keys with `--dart-define=GEMINI_API_KEY=...` instead of the file. Keys needed: Gemini (`api_keys.dart`) and Google Places (`google_maps_private_config.dart`, nearby places and hospital contacts). No Maps SDK key: the map does not use Google. Never print key values or commit them.
 
 ## Architecture
 
@@ -67,7 +67,7 @@ The design rule is that **Gemini only transcribes**. Identity, prices and safety
 
 **On-device user data:** `PrescriptionHistoryService` (photos are copied to app storage), `ReminderService` (`flutter_local_notifications`, daily inexact alarms, no notifications on web) and `HealthProfileService` (allergies). These are `ChangeNotifier` singletons that the UI listens to with `ListenableBuilder`. `SpeechService` is one too: read aloud toggles play/pause, and resumes from the last word the engine reported.
 
-**Map ([lib/widgets/universal_map_view.dart](lib/widgets/universal_map_view.dart)):** used on web and desktop, where it draws OpenStreetMap tiles. CARTO's keyless tiles now return a watermark. Mobile uses `google_maps_flutter`.
+**Map ([lib/widgets/universal_map_view.dart](lib/widgets/universal_map_view.dart)):** one OpenStreetMap view on every platform (touch pan/pinch/double-tap, buttons, markers), no key or billing. `google_maps_flutter` was removed because the Maps SDK requires a Google billing account. CARTO's keyless tiles return a watermark; OSM's tile policy fits light use, so switch to a tile provider before heavy traffic.
 
 ## Localization
 

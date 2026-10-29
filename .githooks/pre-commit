@@ -1,0 +1,15 @@
+#!/bin/sh
+# Blocks commits that contain a Google / Gemini API key.
+# Enable once per clone:  git config core.hooksPath .githooks
+#
+# Keys belong in the git-ignored lib/private/*.dart files or in
+# --dart-define, never in tracked files (this repository is public).
+
+pattern='AIza[0-9A-Za-z_-]{30,}|AQ\.[0-9A-Za-z_.-]{30,}'
+
+if git diff --cached -U0 --no-color | grep '^+' | grep -Eq "$pattern"; then
+  echo "Commit blocked: a Google/Gemini API key is in the staged changes:" >&2
+  git diff --cached --name-only -G "$pattern" | sed 's/^/  /' >&2
+  echo "Move the key to lib/private/ (git-ignored) and unstage it." >&2
+  exit 1
+fi
