@@ -16,6 +16,7 @@ class ChatMessage {
     List<String>? sources,
     this.isLoading = false,
     this.isError = false,
+    this.isWelcome = false,
   })  : timestamp = timestamp ?? DateTime.now(),
         sources = sources ?? <String>[];
 
@@ -28,6 +29,9 @@ class ChatMessage {
   final List<String> sources;
   final bool isLoading;
   final bool isError;
+
+  /// The greeting shown in an empty chat; never sent to the model.
+  final bool isWelcome;
 
   bool get hasImage => imageBytes != null && imageBytes!.isNotEmpty;
   bool get isUser => sender == ChatMessageSender.user;
@@ -43,6 +47,7 @@ class ChatMessage {
     List<String>? sources,
     bool? isLoading,
     bool? isError,
+    bool? isWelcome,
   }) {
     return ChatMessage(
       id: id ?? this.id,
@@ -54,6 +59,7 @@ class ChatMessage {
       sources: sources ?? this.sources,
       isLoading: isLoading ?? this.isLoading,
       isError: isError ?? this.isError,
+      isWelcome: isWelcome ?? this.isWelcome,
     );
   }
 }

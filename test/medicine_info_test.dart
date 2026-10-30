@@ -99,7 +99,8 @@ void main() {
         await tester.pump(const Duration(milliseconds: 500));
 
         expect(find.text('Read aloud'), findsOneWidget);
-        expect(find.text('Same medicine, other prices'), findsOneWidget);
+        // Same-dose products and other strengths share the Alternatives card.
+        expect(find.textContaining('Same dose · '), findsOneWidget);
 
         final notice = find.textContaining('Could not load the medicine information');
         await tester.scrollUntilVisible(notice, 600, scrollable: find.byType(Scrollable).first);
@@ -150,7 +151,7 @@ void main() {
 
       expect(find.text('As written by your doctor'), findsOneWidget);
       expect(find.textContaining('1 x 1 with dinner'), findsOneWidget);
-      expect(find.textContaining('No directions are written'), findsNothing);
+      expect(find.textContaining('could not read directions'), findsNothing);
       expect(tester.takeException(), isNull);
     });
 
@@ -158,7 +159,7 @@ void main() {
       await pumpScanned(tester, scanned());
 
       expect(find.text('As written by your doctor'), findsNothing);
-      expect(find.textContaining('No directions are written on the prescription'), findsOneWidget);
+      expect(find.textContaining('could not read directions for this medicine'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
   });

@@ -22,10 +22,11 @@ class MedicineEquivalence {
     'lysine', 'meglumine', 'as', 'base', 'equivalent', 'eq', 'of', 'micronized',
   };
 
-  static const List<String> _modifiedReleaseMarkers = <String>[
-    'prolonged', 'extended', 'modified', 'sustained', 'controlled', 'delayed',
-    'gastro', 'enteric', 'retard', ' xr', ' sr', ' er', ' mr', ' cr',
-  ];
+  /// Whole words only: " cr" used to match "cream", which made every cream
+  /// look modified-release.
+  static final RegExp _modifiedRelease = RegExp(
+    r'prolonged|extended|modified|sustained|controlled|delayed|gastro|enteric|retard|\b(?:xr|sr|er|mr|cr|xl|la)\b',
+  );
 
   /// Normalized active moiety of one ingredient, e.g.
   /// "Metformin HCl" and "Metformin hydrochloride" -> "metformin".
@@ -56,51 +57,108 @@ class MedicineEquivalence {
     return keys.join(' + ');
   }
 
-  /// "500 mg", "0.5g" and "500mg" all become "500mg".
+  /// "500 mg", "0.5g", "500mg" and "500000mcg" all become "500mg".
   static String strengthKey(String? strength) {
-    final value = (strength ?? '').toLowerCase().replaceAll(' ', '');
+    final value = (strength ?? '')
+        .toLowerCase()
+        .replaceAll(' ', '')
+        .replaceAll(',', '.')
+        .replaceAll(RegExp('µg|μg|microgram(?:me)?s?|ug'), 'mcg')
+        .replaceAll(RegExp('milligram(?:me)?s?'), 'mg');
     if (value.isEmpty) return '';
 
-    return value.replaceAllMapped(RegExp(r'(\d+(?:\.\d+)?)g(?![a-z])'), (m) {
-      final grams = double.tryParse(m.group(1)!);
-      if (grams == null) return m.group(0)!;
-      final mg = grams * 1000;
-      return '${mg == mg.roundToDouble() ? mg.toInt() : mg}mg';
-    });
+    String mg(double amount) {
+      final rounded = (amount * 10000).round() / 10000;
+      return rounded == rounded.roundToDouble() ? '${rounded.toInt()}mg' : '${rounded}mg';
+    }
+
+    return value
+        .replaceAllMapped(RegExp(r'(\d+(?:\.\d+)?)mcg'), (m) {
+          final micrograms = double.tryParse(m.group(1)!);
+          return micrograms == null ? m.group(0)! : mg(micrograms / 1000);
+        })
+        .replaceAllMapped(RegExp(r'(\d+(?:\.\d+)?)g(?![a-z])'), (m) {
+          final grams = double.tryParse(m.group(1)!);
+          return grams == null ? m.group(0)! : mg(grams * 1000);
+        })
+        .replaceAllMapped(RegExp(r'(\d+(?:\.\d+)?)mg'), (m) {
+          final value = double.tryParse(m.group(1)!);
+          return value == null ? m.group(0)! : mg(value);
+        });
   }
 
+  /// Route families come first: an eye ointment, a vaginal tablet or a nasal
+  /// spray suspension must never be grouped with a skin ointment, an oral
+  /// tablet or an oral suspension.
+  static const List<MapEntry<String, List<String>>> _formFamilies = <MapEntry<String, List<String>>>[
+    MapEntry('eye', ['eye', 'ophthalmic', 'ocular']),
+    MapEntry('ear', [' ear ', 'ear drops', ' otic', 'auricular']),
+    MapEntry('nasal', ['nasal', ' nose']),
+    MapEntry('inhalation', ['inhal', 'nebuli', 'evohaler', 'diskus', 'turbuhaler']),
+    MapEntry('vaginal', ['vagin', 'pessar', 'ovule']),
+    MapEntry('rectal', ['rectal', 'enema']),
+    MapEntry('suppository', ['suppositor']),
+    MapEntry('injection', ['inject', 'infusion', 'vial', 'ampoule', 'powder for solution for', ' pen', 'prefilled', 'pre-filled']),
+    MapEntry('patch', ['patch', 'transdermal']),
+    MapEntry('oral-liquid', ['syrup', 'suspension', 'oral solution', 'elixir', 'drops, oral', 'oral drops', 'oral liquid']),
+    MapEntry('powder-oral', ['sachet', 'granules', 'powder for oral', 'effervescent powder']),
+    MapEntry('tablet', ['tablet', 'caplet']),
+    MapEntry('capsule', ['capsule']),
+    MapEntry('cream', ['cream']),
+    MapEntry('ointment', ['ointment']),
+    MapEntry('gel', ['gel']),
+  ];
+
   /// Groups dosage forms that are interchangeable in presentation, while
-  /// keeping modified-release forms apart from immediate-release ones.
+  /// keeping modified-release forms apart from immediate-release ones and
+  /// each route of administration apart from the others.
   static String formFamily(String? form) {
-    final value = ' ${(form ?? '').toLowerCase()} ';
+    final value = ' ${(form ?? '').toLowerCase().replaceAll('/', ' / ')} ';
     if (value.trim().isEmpty) return '';
 
-    final modified = _modifiedReleaseMarkers.any(value.contains) ? '-mr' : '';
+    final modified = _modifiedRelease.hasMatch(value) ? '-mr' : '';
 
-    const families = <String, List<String>>{
-      'tablet': ['tablet', 'caplet'],
-      'capsule': ['capsule'],
-      'oral-liquid': ['syrup', 'suspension', 'oral solution', 'elixir', 'drops, oral', 'oral drops'],
-      'powder-oral': ['sachet', 'granules', 'powder for oral'],
-      'injection': ['inject', 'infusion', 'vial', 'ampoule', 'powder for solution for'],
-      'cream': ['cream'],
-      'ointment': ['ointment'],
-      'gel': ['gel'],
-      'eye': ['eye', 'ophthalmic'],
-      'ear': ['ear', 'otic'],
-      'nasal': ['nasal'],
-      'inhalation': ['inhal', 'nebuli'],
-      'suppository': ['suppositor'],
-      'patch': ['patch', 'transdermal'],
-    };
-
-    for (final entry in families.entries) {
+    for (final entry in _formFamilies) {
       if (entry.value.any(value.contains)) {
         return '${entry.key}$modified';
       }
     }
 
     return '${value.trim()}$modified';
+  }
+
+  /// Route of administration implied by a dosage form, or '' when the form
+  /// does not say (an injection can be IV, IM or SC).
+  static String routeOfForm(String? form) {
+    final family = formFamily(form).replaceAll('-mr', '');
+    final value = (form ?? '').toLowerCase();
+    if (value.contains('sublingual')) return 'sublingual';
+    switch (family) {
+      case 'tablet':
+      case 'capsule':
+      case 'oral-liquid':
+      case 'powder-oral':
+        return 'oral';
+      case 'eye':
+        return 'ophthalmic';
+      case 'ear':
+        return 'otic';
+      case 'nasal':
+        return 'nasal';
+      case 'inhalation':
+        return 'inhalation';
+      case 'vaginal':
+        return 'vaginal';
+      case 'rectal':
+      case 'suppository':
+        return 'rectal';
+      case 'cream':
+      case 'ointment':
+      case 'gel':
+      case 'patch':
+        return 'topical';
+    }
+    return '';
   }
 
   /// Same ingredients (any strength or form).
@@ -126,6 +184,26 @@ class MedicineEquivalence {
   /// "100ml" -> (100, 'ml'), "30g" -> (30, 'g'). Null when unreadable.
   static (double, String)? packQuantity(String? pack) {
     final value = (pack ?? '').trim().toLowerCase();
+
+    // "10x1ml", "100 x 10ml", "1x50ml": count times the size of each unit.
+    // A count in brackets such as "30 (3x10)" is already the total.
+    final multiplied = RegExp(r'^(\d+)\s*x\s*(\d+(?:\.\d+)?)\s*(ml|l|g)?(?![a-z])').firstMatch(value);
+    if (multiplied != null) {
+      final count = double.parse(multiplied.group(1)!);
+      final each = double.parse(multiplied.group(2)!);
+      if (count <= 0 || each <= 0) return null;
+      switch (multiplied.group(3)) {
+        case 'ml':
+          return (count * each, 'ml');
+        case 'l':
+          return (count * each * 1000, 'ml');
+        case 'g':
+          return (count * each, 'g');
+        default:
+          return (count * each, 'unit');
+      }
+    }
+
     final match = RegExp(
       r'^(\d+(?:\.\d+)?)\s*(ml|l|g|mg|tablets?|tabs?|capsules?|caps?|sachets?|ampoules?|amps?|vials?|suppositories|pcs?|pieces?)?(?![a-z])',
     ).firstMatch(value);

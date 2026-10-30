@@ -234,6 +234,8 @@ class MedicineInfoService {
       'nasal': 'nasal',
       'inhalation': 'inhalation inhaler aerosol',
       'suppository': 'suppository suppositories',
+      'rectal': 'rectal',
+      'vaginal': 'vaginal',
       'patch': 'patch transdermal',
     };
     return terms[MedicineEquivalence.formFamily(medicine.dosageForm).replaceAll('-mr', '')] ?? '';
@@ -264,6 +266,10 @@ class MedicineInfoService {
         return const <String>['RESPIRATORY (INHALATION)'];
       case 'suppository':
         return const <String>['RECTAL', 'VAGINAL'];
+      case 'rectal':
+        return const <String>['RECTAL'];
+      case 'vaginal':
+        return const <String>['VAGINAL'];
       case 'patch':
         return const <String>['TRANSDERMAL'];
       default:
@@ -682,7 +688,7 @@ _FdaLabel? _pickFdaLabel(Map<String, Object> input) {
     // Extended-release labels have different dosing from plain tablets.
     final forms = '$brand ${openfda['generic_name'] ?? ''} ${result['dosage_forms_and_strengths'] ?? ''} '
         '${result['active_ingredient'] ?? ''} ${result['package_label_principal_display_panel'] ?? ''}';
-    final mrLabel = RegExp(r'extended.release|delayed.release|prolonged.release|(8|12|24).?hr?|(ER|XR|SR|CR)', caseSensitive: false)
+    final mrLabel = RegExp(r'extended.release|delayed.release|prolonged.release|\b(8|12|24).?hr?\b|\b(ER|XR|SR|CR)\b', caseSensitive: false)
         .hasMatch(forms);
     if (mrLabel == modifiedRelease) score += 3;
     if (strengths.isNotEmpty && strengths.every((value) => RegExp('\\b$value\\s*mg', caseSensitive: false).hasMatch(forms))) {

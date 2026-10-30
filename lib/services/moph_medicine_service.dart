@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:crypto/crypto.dart' show sha256;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter/widgets.dart' show AppLifecycleListener;
@@ -10,10 +11,12 @@ import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:string_similarity/string_similarity.dart';
 
+import '../l10n/app_text.dart';
 import '../models/medicine_price.dart';
 import '../utils/formatters.dart';
 import '../utils/medicine_equivalence.dart';
 import '../utils/medicine_normalizer.dart';
+import '../utils/phonetic_skeleton.dart';
 import 'connectivity_service.dart';
 
 class MophMedicineService {
@@ -52,6 +55,15 @@ class MophMedicineService {
   static const int staleAfterDays = 60;
 
   List<MedicinePrice> _catalog = <MedicinePrice>[];
+  Map<String, MedicinePrice> _byId = <String, MedicinePrice>{};
+
+  /// Normalized brand, generic and ingredient names, computed once per
+  /// product instead of on every search.
+  final Expando<_SearchKeys> _searchKeys = Expando<_SearchKeys>('searchKeys');
+
+  String _lastScoredQuery = '';
+  List<MedicinePrice>? _lastScoredCatalog;
+  List<_ScoredMedicine> _lastScored = const <_ScoredMedicine>[];
   bool _isInitialized = false;
   Completer<void>? _initCompleter;
   String _lastUpdatedDate = '';
@@ -65,6 +77,24 @@ class MophMedicineService {
   /// Increases whenever a newer list replaces the one in memory, so screens
   /// showing the list date or prices can rebuild.
   final ValueNotifier<int> datasetRevision = ValueNotifier<int>(0);
+
+  /// True once the list in use is in memory. The app starts drawing before
+  /// that, so anything showing counts or dates listens to this too.
+  final ValueNotifier<bool> loaded = ValueNotifier<bool>(false);
+
+  /// Fires on first load and on every newer list.
+  Listenable get changes => Listenable.merge(<Listenable>[loaded, datasetRevision]);
+
+  /// What the list is doing right now (loading, checking, downloading...)
+  /// and how far along, for the status card and the Sync buttons.
+  final ValueNotifier<MophSyncProgress> progress = ValueNotifier<MophSyncProgress>(MophSyncProgress.idle);
+
+  /// True while a check or download runs; Sync buttons stay disabled.
+  bool get isSyncing => _checkInFlight != null;
+
+  void _report(MophSyncStage stage, double fraction) {
+    progress.value = MophSyncProgress(stage, fraction.clamp(0.0, 1.0));
+  }
 
   bool get isInitialized => _isInitialized;
   int get totalMedicineCount => _catalog.length;
@@ -98,10 +128,13 @@ class MophMedicineService {
     if (_initCompleter != null) return _initCompleter!.future;
 
     _initCompleter = Completer<void>();
+    _report(MophSyncStage.loading, 0.1);
 
     try {
       final assetCsv = await rootBundle.loadString(_assetCsvPath);
+      _report(MophSyncStage.loading, 0.35);
       var dataset = await compute(parseMophDataset, assetCsv);
+      _report(MophSyncStage.loading, 0.8);
       var manifest = await _bundledManifest(dataset);
 
       // A list downloaded earlier is used only when it is newer than the one
@@ -123,19 +156,56 @@ class MophMedicineService {
         debugPrint('MophMedicineService: ignoring saved dataset: $e');
       }
 
-      _catalog = dataset.medicines;
+      _setCatalog(dataset.medicines);
       _lastUpdatedDate = dataset.listDate;
       _manifest = manifest;
       _loadError = _catalog.isEmpty ? 'The bundled medicine list is empty.' : null;
       debugPrint('MophMedicineService: Indexed ${_catalog.length} MOPH medicines (list ${manifest.version}).');
     } catch (e, st) {
       debugPrint('MophMedicineService initialization error: $e\n$st');
-      _catalog = <MedicinePrice>[];
+      _setCatalog(const <MedicinePrice>[]);
       _loadError = 'The medicine list could not be loaded.';
     }
 
     _isInitialized = true;
+    // A check started meanwhile reports its own stage.
+    if (_checkInFlight == null) progress.value = MophSyncProgress.idle;
     _initCompleter!.complete();
+    // Screens showing the list date or count rebuild once it is loaded.
+    loaded.value = true;
+  }
+
+  /// Official prices that differ between the previous list and the one
+  /// that replaced it, set on each update (empty until then).
+  List<PriceChange> lastPriceChanges = const <PriceChange>[];
+
+  static List<PriceChange> _priceChanges(Map<String, MedicinePrice> before, List<MedicinePrice> after) {
+    final changes = <PriceChange>[];
+    for (final medicine in after) {
+      final old = before[medicine.medicineId]?.priceLbp;
+      final now = medicine.priceLbp;
+      if (old != null && now != null && (old - now).abs() >= 1) {
+        changes.add(PriceChange(medicine: medicine, oldPrice: old, newPrice: now));
+      }
+    }
+    return changes;
+  }
+
+  void _setCatalog(List<MedicinePrice> medicines) {
+    _catalog = medicines;
+    _byId = <String, MedicinePrice>{for (final medicine in medicines) medicine.medicineId: medicine};
+  }
+
+  _SearchKeys _keysOf(MedicinePrice medicine) {
+    final brandWords = medicine.brandName.split(RegExp(r'[\s\-_/]+'));
+    return _searchKeys[medicine] ??= _SearchKeys(
+      brand: MedicineNormalizer.normalizeText(medicine.brandName),
+      generic: MedicineNormalizer.normalizeText(medicine.genericName ?? ''),
+      ingredients: medicine.activeIngredients.map(MedicineNormalizer.normalizeText).toList(growable: false),
+      brandSkeleton: PhoneticSkeleton.ofLatin(brandWords.first),
+      fullBrandSkeleton: PhoneticSkeleton.ofLatin(medicine.brandName),
+      genericSkeleton: PhoneticSkeleton.ofLatin((medicine.genericName ?? '').split(RegExp(r'\s+')).first),
+    );
   }
 
   Future<MophDatasetManifest> _bundledManifest(MophDataset dataset) async {
@@ -165,9 +235,17 @@ class MophMedicineService {
     final safeOffset = offset < 0 ? 0 : offset;
 
     final cleanedQuery = MedicineNormalizer.cleanUserQuery(query);
-    if (cleanedQuery.isEmpty) {
+    if (cleanedQuery.isEmpty && !PhoneticSkeleton.hasArabic(query)) {
       // Direct browse when query is empty: return catalog sliced by offset and limit
       return getMedicinesPage(limit: safeLimit, offset: safeOffset);
+    }
+
+    // A brand typed in Arabic letters ("بنادول") is matched by sound.
+    if (PhoneticSkeleton.hasArabic(query)) {
+      final scored = _scoredArabic(query);
+      return List<MedicinePrice>.unmodifiable(
+        scored.skip(safeOffset).take(safeLimit).map((item) => item.med.copyWith(similarityScore: item.score)),
+      );
     }
 
     final normalizedQuery = MedicineNormalizer.normalizeText(cleanedQuery);
@@ -175,22 +253,76 @@ class MophMedicineService {
       return getMedicinesPage(limit: safeLimit, offset: safeOffset);
     }
 
-    final scored = <_ScoredMedicine>[];
-
-    for (final med in _catalog) {
-      final score = _calculateMatchScore(med, normalizedQuery, cleanedQuery);
-      if (score > 0.15) {
-        scored.add(_ScoredMedicine(med: med, score: score));
-      }
-    }
-
-    scored.sort((a, b) => b.score.compareTo(a.score));
+    final scored = _scored(normalizedQuery, cleanedQuery);
 
     final results = scored.skip(safeOffset).take(safeLimit).map((item) {
       return item.med.copyWith(similarityScore: item.score);
     }).toList();
 
     return List<MedicinePrice>.unmodifiable(results);
+  }
+
+  /// Ranked matches for a query. The last ranking is kept, so loading the
+  /// next page of the same search does not score the catalog again.
+  List<_ScoredMedicine> _scored(String normalizedQuery, String cleanedQuery) {
+    if (normalizedQuery == _lastScoredQuery && identical(_lastScoredCatalog, _catalog)) {
+      return _lastScored;
+    }
+
+    final scored = <_ScoredMedicine>[];
+    for (final med in _catalog) {
+      final score = _calculateMatchScore(med, normalizedQuery, cleanedQuery);
+      if (score > 0.15) {
+        scored.add(_ScoredMedicine(med: med, score: score));
+      }
+    }
+    scored.sort((a, b) => b.score.compareTo(a.score));
+
+    _lastScoredQuery = normalizedQuery;
+    _lastScoredCatalog = _catalog;
+    _lastScored = scored;
+    return scored;
+  }
+
+  List<_ScoredMedicine> _scoredArabic(String query) {
+    final skeleton = PhoneticSkeleton.ofArabic(query);
+    final cacheKey = 'ar:$skeleton';
+    if (cacheKey == _lastScoredQuery && identical(_lastScoredCatalog, _catalog)) return _lastScored;
+
+    final scored = <_ScoredMedicine>[];
+    if (skeleton.length >= 3) {
+      for (final med in _catalog) {
+        final keys = _keysOf(med);
+        double score = 0;
+        if (keys.brandSkeleton == skeleton) {
+          score = 0.72;
+        } else if (keys.genericSkeleton == skeleton) {
+          score = 0.66;
+        } else if (keys.brandSkeleton.startsWith(skeleton)) {
+          score = 0.6;
+        } else if (keys.fullBrandSkeleton.startsWith(skeleton)) {
+          score = 0.55;
+        }
+        if (score > 0) scored.add(_ScoredMedicine(med: med, score: score));
+      }
+      scored.sort((a, b) => b.score.compareTo(a.score));
+    }
+
+    _lastScoredQuery = cacheKey;
+    _lastScoredCatalog = _catalog;
+    _lastScored = scored;
+    return scored;
+  }
+
+  /// How many products match [query] in total (all of them for an empty
+  /// query), for "128 matches" labels while results load page by page.
+  Future<int> countMatches(String query) async {
+    await initialize();
+    if (PhoneticSkeleton.hasArabic(query)) return _scoredArabic(query).length;
+    final cleanedQuery = MedicineNormalizer.cleanUserQuery(query);
+    final normalizedQuery = MedicineNormalizer.normalizeText(cleanedQuery);
+    if (normalizedQuery.isEmpty) return _catalog.length;
+    return _scored(normalizedQuery, cleanedQuery).length;
   }
 
   /// Returns paginated medicines directly from the catalog.
@@ -208,10 +340,7 @@ class MophMedicineService {
   MedicinePrice? findById(String medicineId) {
     final id = medicineId.trim();
     if (id.isEmpty) return null;
-    for (final medicine in _catalog) {
-      if (medicine.medicineId == id) return medicine;
-    }
-    return null;
+    return _byId[id];
   }
 
   /// Finds medicines mentioned inside a natural language sentence or chatbot query.
@@ -221,6 +350,9 @@ class MophMedicineService {
 
     final cleanText = MedicineNormalizer.cleanUserQuery(text).toLowerCase();
     final words = cleanText.split(RegExp(r'\s+')).where((w) => w.length >= 3).toList();
+    // Whole words only: the brand "ACE" must not match "face".
+    final paddedText = ' ${cleanText.replaceAll(RegExp(r'[^a-z0-9؀-ۿ]+'), ' ')} ';
+    bool mentions(String phrase) => phrase.length >= 3 && paddedText.contains(' $phrase ');
 
     final matched = <MedicinePrice>[];
     final seen = <String>{};
@@ -230,7 +362,7 @@ class MophMedicineService {
       final brandLower = med.brandName.toLowerCase();
       final primaryToken = brandLower.split(RegExp(r'[\s\-_/]+')).first;
 
-      if (primaryToken.length >= 3 && cleanText.contains(primaryToken)) {
+      if (mentions(primaryToken)) {
         if (seen.add(med.brandName.toLowerCase())) {
           matched.add(med);
           if (matched.length >= limit) break;
@@ -242,7 +374,7 @@ class MophMedicineService {
     if (matched.length < limit) {
       for (final med in _catalog) {
         final generic = med.genericName?.toLowerCase();
-        if (generic != null && generic.length >= 3 && cleanText.contains(generic)) {
+        if (generic != null && mentions(generic)) {
           if (seen.add(med.brandName.toLowerCase())) {
             matched.add(med);
             if (matched.length >= limit) break;
@@ -281,8 +413,9 @@ class MophMedicineService {
   }
 
   double _calculateMatchScore(MedicinePrice med, String normQuery, String rawQuery) {
-    final normBrand = MedicineNormalizer.normalizeText(med.brandName);
-    final normGeneric = MedicineNormalizer.normalizeText(med.genericName ?? '');
+    final keys = _keysOf(med);
+    final normBrand = keys.brand;
+    final normGeneric = keys.generic;
 
     // Exact brand match
     if (normBrand == normQuery) return 1.0;
@@ -295,8 +428,7 @@ class MophMedicineService {
     if (normGeneric.contains(normQuery)) return 0.70;
 
     // Ingredient match
-    for (final ing in med.activeIngredients) {
-      final normIng = MedicineNormalizer.normalizeText(ing);
+    for (final normIng in keys.ingredients) {
       if (normIng.contains(normQuery)) return 0.65;
     }
 
@@ -429,14 +561,16 @@ class MophMedicineService {
   // Dataset updates
   // ---------------------------------------------------------------------------
 
-  /// Checks for a newer list now (if the last check is older than
-  /// [checkInterval]), whenever the device comes back online, and whenever the
-  /// app returns to the foreground. Call once after [initialize].
+  /// Checks for a newer list now, and (at most every [checkInterval]) whenever
+  /// the device comes back online or the app returns to the foreground. Call
+  /// once after [initialize].
   void startAutoUpdates() {
     if (_autoUpdatesStarted || !canCheckForUpdates) return;
     _autoUpdatesStarted = true;
 
-    unawaited(checkAndUpdateIfStale());
+    // Every launch asks once (a 1 KB manifest), so the user sees the list
+    // being checked; reconnects and resumes stay rate-limited.
+    unawaited(checkAndUpdateIfStale(force: true));
 
     final connectivity = ConnectivityService();
     var wasOnline = connectivity.isOnline;
@@ -454,9 +588,36 @@ class MophMedicineService {
   /// asked at most once every [checkInterval].
   Future<MophSyncResult> checkAndUpdateIfStale({bool force = false}) {
     // Startup, reconnection and the Sync button can overlap; share one check.
+    if (force && _checkInFlight == null && _isInitialized) _report(MophSyncStage.checking, 0);
     return _checkInFlight ??= _check(force).whenComplete(() {
       _checkInFlight = null;
+      progress.value = MophSyncProgress.idle;
     });
+  }
+
+  /// Downloads [uri], reporting progress between [from] and [to].
+  Future<List<int>> _download(Uri uri, Duration timeout, double from, double to) async {
+    final client = http.Client();
+    try {
+      final request = http.Request('GET', uri);
+      // An uncompressed transfer gives an exact size for the percentage
+      // (browsers choose the encoding themselves).
+      if (!kIsWeb) request.headers['Accept-Encoding'] = 'identity';
+      final response = await client.send(request).timeout(const Duration(seconds: 20));
+      if (response.statusCode != 200) {
+        throw http.ClientException('HTTP ${response.statusCode}', uri);
+      }
+
+      final total = response.contentLength ?? 0;
+      final bytes = <int>[];
+      await response.stream.timeout(timeout).forEach((chunk) {
+        bytes.addAll(chunk);
+        if (total > 0) _report(MophSyncStage.downloading, from + (to - from) * bytes.length / total);
+      });
+      return bytes;
+    } finally {
+      client.close();
+    }
   }
 
   Future<MophSyncResult> _check(bool force) async {
@@ -483,24 +644,34 @@ class MophMedicineService {
 
     try {
       final base = dataBaseUrl.endsWith('/') ? dataBaseUrl : '$dataBaseUrl/';
+      _report(MophSyncStage.checking, 0.05);
       final manifestResponse = await http.get(Uri.parse('${base}lebanon_medicine_prices.json')).timeout(const Duration(seconds: 15));
       if (manifestResponse.statusCode != 200) {
         return result(MophSyncStatus.failed, 'HTTP ${manifestResponse.statusCode}');
       }
+      _report(MophSyncStage.checking, 0.1);
 
       _lastCheckTime = now;
       await prefs.setInt(_storageKeyLastCheck, now.millisecondsSinceEpoch);
 
       final remote = MophDatasetManifest.tryParse(utf8.decode(manifestResponse.bodyBytes));
       if (remote == null) return result(MophSyncStatus.failed, 'The published manifest is not valid.');
-      if (!remote.isNewerThan(_manifest)) return result(MophSyncStatus.upToDate);
-
-      final csvResponse = await http.get(Uri.parse('${base}lebanon_medicine_prices.csv')).timeout(const Duration(seconds: 90));
-      if (csvResponse.statusCode != 200) {
-        return result(MophSyncStatus.failed, 'HTTP ${csvResponse.statusCode}');
+      if (!remote.isNewerThan(_manifest)) {
+        _report(MophSyncStage.checking, 1);
+        return result(MophSyncStatus.upToDate);
       }
 
-      final body = utf8.decode(csvResponse.bodyBytes);
+      _report(MophSyncStage.downloading, 0.1);
+      final csvBytes = await _download(Uri.parse('${base}lebanon_medicine_prices.csv'), const Duration(seconds: 90), 0.1, 0.8);
+
+      // The manifest's checksum proves the file is the one the workflow
+      // published, complete and unchanged.
+      _report(MophSyncStage.verifying, 0.82);
+      if (remote.sha256.isNotEmpty && sha256.convert(csvBytes).toString() != remote.sha256) {
+        return result(MophSyncStatus.failed, 'The downloaded list does not match its checksum.');
+      }
+
+      final body = utf8.decode(csvBytes);
       final dataset = await compute(parseMophDataset, body);
       // A partial download or a file from another build must not replace a
       // complete list.
@@ -508,8 +679,10 @@ class MophMedicineService {
         return result(MophSyncStatus.failed, 'The downloaded list is incomplete.');
       }
 
+      _report(MophSyncStage.applying, 0.9);
       await _saveDataset(remote, body);
-      _catalog = dataset.medicines;
+      lastPriceChanges = _priceChanges(_byId, dataset.medicines);
+      _setCatalog(dataset.medicines);
       _lastUpdatedDate = dataset.listDate;
       _manifest = remote;
       _loadError = null;
@@ -601,6 +774,7 @@ class MophDatasetManifest {
     this.published = '',
     this.rows = 0,
     this.generatedAt = '',
+    this.sha256 = '',
   });
 
   final String version;
@@ -610,6 +784,9 @@ class MophDatasetManifest {
   final String published;
   final int rows;
   final String generatedAt;
+
+  /// SHA-256 of the CSV this manifest describes, or '' for older manifests.
+  final String sha256;
 
   static MophDatasetManifest? tryParse(String raw) {
     try {
@@ -621,6 +798,7 @@ class MophDatasetManifest {
         published: '${json['published'] ?? json['list_date'] ?? ''}',
         rows: int.tryParse('${json['rows'] ?? 0}') ?? 0,
         generatedAt: '${json['generated_at'] ?? ''}',
+        sha256: '${json['sha256'] ?? ''}'.toLowerCase(),
       );
     } catch (_) {
       return null;
@@ -633,6 +811,7 @@ class MophDatasetManifest {
         'published': published,
         'rows': rows,
         'generated_at': generatedAt,
+        'sha256': sha256,
       });
 
   /// Later publication wins; for the same publication, a later rebuild.
@@ -649,11 +828,74 @@ class MophDatasetManifest {
   }
 }
 
+/// One product whose official price changed with a new MOPH list.
+class PriceChange {
+  const PriceChange({required this.medicine, required this.oldPrice, required this.newPrice});
+
+  final MedicinePrice medicine;
+  final double oldPrice;
+  final double newPrice;
+
+  int get percent => ((newPrice - oldPrice) / oldPrice * 100).round();
+}
+
+class _SearchKeys {
+  const _SearchKeys({
+    required this.brand,
+    required this.generic,
+    required this.ingredients,
+    required this.brandSkeleton,
+    required this.fullBrandSkeleton,
+    required this.genericSkeleton,
+  });
+
+  final String brand;
+  final String generic;
+  final List<String> ingredients;
+
+  /// Consonant skeletons for searches typed in Arabic letters.
+  final String brandSkeleton;
+  final String fullBrandSkeleton;
+  final String genericSkeleton;
+}
+
 class _ScoredMedicine {
   final MedicinePrice med;
   final double score;
 
   _ScoredMedicine({required this.med, required this.score});
+}
+
+enum MophSyncStage { idle, loading, checking, downloading, verifying, applying }
+
+/// Where the list is in loading or syncing, with overall progress 0..1.
+class MophSyncProgress {
+  const MophSyncProgress(this.stage, this.fraction);
+
+  static const idle = MophSyncProgress(MophSyncStage.idle, 0);
+
+  final MophSyncStage stage;
+  final double fraction;
+
+  bool get busy => stage != MophSyncStage.idle;
+  int get percent => (fraction * 100).round();
+
+  String label({required bool isArabic}) {
+    switch (stage) {
+      case MophSyncStage.idle:
+        return '';
+      case MophSyncStage.loading:
+        return appText(isArabic).loadingTheMedicineList;
+      case MophSyncStage.checking:
+        return appText(isArabic).checkingForNewData;
+      case MophSyncStage.downloading:
+        return appText(isArabic).downloadingTheNewList;
+      case MophSyncStage.verifying:
+        return appText(isArabic).verifyingTheList;
+      case MophSyncStage.applying:
+        return appText(isArabic).applyingTheUpdate;
+    }
+  }
 }
 
 enum MophSyncStatus {
@@ -685,28 +927,20 @@ class MophSyncResult {
   bool get success => status != MophSyncStatus.failed;
 
   String describe({required bool isArabic}) {
-    var date = listDate.isEmpty ? (isArabic ? 'غير معروف' : 'unknown') : listDate;
+    var date = listDate.isEmpty ? appText(isArabic).unknown : listDate;
     if (publishedDate.isNotEmpty && publishedDate != listDate) {
-      date = isArabic ? '$date، المعدّلة في $publishedDate' : '$date, revised $publishedDate';
+      date = appText(isArabic).revised(date, publishedDate);
     }
 
     switch (status) {
       case MophSyncStatus.updated:
-        return isArabic
-            ? 'تم التحديث إلى لائحة وزارة الصحة بتاريخ $date (${formatCount(medicineCount)} دواء).'
-            : 'Updated to the MOPH list of $date (${formatCount(medicineCount)} medicines).';
+        return appText(isArabic).updatedToTheMophListOf(date, formatCount(medicineCount));
       case MophSyncStatus.upToDate:
-        return isArabic
-            ? 'لديك أحدث لائحة من وزارة الصحة ($date).'
-            : 'You already have the latest MOPH list ($date).';
+        return appText(isArabic).youAlreadyHaveTheLatestMoph(date);
       case MophSyncStatus.notConfigured:
-        return isArabic
-            ? 'يتم استخدام لائحة وزارة الصحة بتاريخ $date. تصل اللوائح الجديدة مع تحديثات التطبيق.'
-            : 'Using the MOPH list of $date. New lists arrive with app updates.';
+        return appText(isArabic).usingTheMophListOfNew(date);
       case MophSyncStatus.failed:
-        return isArabic
-            ? 'تعذر التحقق من لائحة أحدث. يتم عرض لائحة $date.'
-            : 'Could not check for a newer MOPH list. Showing the list of $date.';
+        return appText(isArabic).couldNotCheckForANewer(date);
     }
   }
 }
@@ -745,6 +979,9 @@ MophDataset parseMophDataset(String csvContent) {
     for (var j = 0; j < headers.length; j++) {
       map[headers[j]] = j < values.length ? values[j].trim() : '';
     }
+
+    // Every row comes from the same MOPH page, so the CSV no longer repeats it.
+    if ((map['source_url'] ?? '').isEmpty) map['source_url'] = MophMedicineService.mophPublicUrl;
 
     if ((map['medicine_id'] ?? '').isEmpty) {
       final codeMatch = RegExp(r'Code:\s*(\d+)').firstMatch(map['notes'] ?? '');

@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Resources referenced by name from Dart (notification icon, alarm tone),
+     which resource shrinking can't see. -->
+<resources xmlns:tools="http://schemas.android.com/tools"
+    tools:keep="@raw/pharmalens_alarm,@mipmap/ic_launcher,@mipmap/ic_launcher_monochrome,@drawable/splash_logo,@drawable/launch_background" />

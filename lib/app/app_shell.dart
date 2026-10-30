@@ -1,8 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../l10n/app_text.dart';
 import '../screens/doctors_screen.dart';
+import '../screens/dose_screen.dart';
 import '../screens/home_screen.dart';
 import '../screens/medicine_details_screen.dart';
 import '../screens/medicine_search_screen.dart';
@@ -11,6 +15,8 @@ import '../screens/pharmacies_map_screen.dart';
 import '../screens/settings_screen.dart';
 import '../services/connectivity_service.dart';
 import '../services/moph_medicine_service.dart';
+import '../services/prescription_history_service.dart';
+import '../services/reminder_service.dart';
 import '../theme/pharmalens_theme.dart';
 import '../utils/formatters.dart';
 import '../widgets/responsive.dart';
@@ -63,6 +69,9 @@ class _AppShellState extends State<AppShell> {
     super.initState();
 
     MophMedicineService().datasetRevision.addListener(_onPricesUpdated);
+    ReminderService().pendingDose.addListener(_onDoseDue);
+    // A reminder notification may have launched the app.
+    WidgetsBinding.instance.addPostFrameCallback((_) => _onDoseDue());
 
     // Web links such as /?tab=doctors open that section directly.
     if (kIsWeb) {
@@ -91,7 +100,18 @@ class _AppShellState extends State<AppShell> {
   @override
   void dispose() {
     MophMedicineService().datasetRevision.removeListener(_onPricesUpdated);
+    ReminderService().pendingDose.removeListener(_onDoseDue);
     super.dispose();
+  }
+
+  /// A reminder was tapped or an alarm is due: show the dose screen above
+  /// every section.
+  void _onDoseDue() {
+    final reminders = ReminderService();
+    final dose = reminders.pendingDose.value;
+    if (dose == null || !mounted) return;
+    reminders.pendingDose.value = null;
+    unawaited(DoseScreen.show(Navigator.of(context, rootNavigator: true), dose));
   }
 
   /// A newer MOPH list arrived in the background (see MophMedicineService).
@@ -99,15 +119,32 @@ class _AppShellState extends State<AppShell> {
     if (!mounted) return;
     final moph = MophMedicineService();
     setState(() {});
+
+    // Price changes for medicines the user takes or has scanned.
+    final mine = <String>{
+      for (final reminder in ReminderService().reminders)
+        if (reminder.medicineId.isNotEmpty) reminder.medicineId,
+      for (final record in PrescriptionHistoryService().records)
+        for (final entry in record.medicines)
+          if (entry.medicineId.isNotEmpty) entry.medicineId,
+    };
+    final changes = moph.lastPriceChanges.where((c) => mine.contains(c.medicine.medicineId)).toList();
+
+    final updated = appText(_isArabic).medicinePricesUpdatedToTheLatest(moph.publishedDate);
+
     ScaffoldMessenger.maybeOf(context)?.showSnackBar(
       SnackBar(
-        content: Text(
-          _isArabic
-              ? 'تم تحديث أسعار الأدوية إلى لائحة وزارة الصحة (${moph.publishedDate}).'
-              : 'Medicine prices updated to the latest MOPH list (${moph.publishedDate}).',
-        ),
+        duration: Duration(seconds: changes.isEmpty ? 4 : 8),
+        content: Text(changes.isEmpty ? updated : '$updated\n${changes.take(3).map(_describeChange).join('\n')}'),
       ),
     );
+  }
+
+  String _describeChange(PriceChange change) {
+    final arrow = change.newPrice > change.oldPrice ? '↑' : '↓';
+    final sign = change.percent > 0 ? '+' : '';
+    return '${change.medicine.brandName} ${change.medicine.strength ?? ''}: '
+        '${formatCount(change.oldPrice)} → ${formatCount(change.newPrice)} LBP ($arrow $sign${change.percent}%)';
   }
 
   final Map<AppTab, GlobalKey<NavigatorState>> _navigatorKeys = {
@@ -184,17 +221,17 @@ class _AppShellState extends State<AppShell> {
   String _label(AppTab tab) {
     switch (tab) {
       case AppTab.home:
-        return _isArabic ? 'الرئيسية' : 'Home';
+        return appText(_isArabic).home;
       case AppTab.medicines:
-        return _isArabic ? 'الأدوية' : 'Medicines';
+        return appText(_isArabic).medicines;
       case AppTab.doctors:
-        return _isArabic ? 'الأطباء' : 'Doctors';
+        return appText(_isArabic).doctors;
       case AppTab.pharmacies:
-        return _isArabic ? 'الصيدليات' : 'Pharmacies';
+        return appText(_isArabic).pharmacies;
       case AppTab.myHealth:
-        return _isArabic ? 'ملفي الصحي' : 'My health';
+        return appText(_isArabic).myHealth;
       case AppTab.settings:
-        return _isArabic ? 'الإعدادات' : 'Settings';
+        return appText(_isArabic).settings;
     }
   }
 
@@ -411,7 +448,7 @@ class _Sidebar extends StatelessWidget {
                           ),
                         ),
                         Text(
-                          isArabic ? 'مساعد سلامة الدواء' : 'Medicine safety assistant',
+                          appText(isArabic).medicineSafetyAssistant,
                           style: TextStyle(color: palette.textMuted, fontSize: 11.5, fontWeight: FontWeight.w600),
                         ),
                       ],
@@ -447,9 +484,7 @@ class _Sidebar extends StatelessWidget {
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        isArabic
-                            ? 'لائحة وزارة الصحة ${moph.publishedDate}\n${formatCount(moph.totalMedicineCount)} دواء'
-                            : 'MOPH list ${moph.publishedDate}\n${formatCount(moph.totalMedicineCount)} medicines',
+                        appText(isArabic).mophListMedicines(moph.publishedDate, formatCount(moph.totalMedicineCount)),
                         style: TextStyle(color: palette.textSecondary, fontSize: 11.5, height: 1.35, fontWeight: FontWeight.w700),
                       ),
                     ),
@@ -561,9 +596,7 @@ class _OfflineBanner extends StatelessWidget {
                         const SizedBox(width: 10),
                         Expanded(
                           child: Text(
-                            isArabic
-                                ? 'أنت غير متصل. البحث عن الأدوية والأطباء والسجل يعمل، أما قراءة الوصفات والخريطة فتحتاج إلى الإنترنت.'
-                                : 'You are offline. Medicine search, doctors and your history still work; reading prescriptions and the map need internet.',
+                            appText(isArabic).youAreOfflineMedicineSearchDoctors,
                             style: const TextStyle(color: Colors.white, fontSize: 12.5, fontWeight: FontWeight.w700),
                           ),
                         ),

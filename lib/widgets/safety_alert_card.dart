@@ -28,7 +28,9 @@ class SafetyAlertCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Icon(
-              alert.type == SafetyAlertType.allergy ? Icons.no_food_rounded : Icons.warning_amber_rounded,
+              alert.type == SafetyAlertType.allergy || alert.type == SafetyAlertType.relatedAllergy
+                  ? Icons.no_food_rounded
+                  : Icons.warning_amber_rounded,
               color: color,
             ),
             const SizedBox(width: 10),

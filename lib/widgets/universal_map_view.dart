@@ -290,8 +290,8 @@ class UniversalHealthcareMapViewState extends State<UniversalHealthcareMapView>
                     errorBuilder: (context, error, stack) {
                       return Container(
                         color: isDark
-                            ? const Color(0xFF0F1E28)
-                            : const Color(0xFFE8F1F5),
+                            ? PharmaLensColors.mapTileDark
+                            : PharmaLensColors.mapTileLight,
                         child: Center(
                           child: Icon(
                             Icons.grid_4x4_rounded,
@@ -368,7 +368,7 @@ class UniversalHealthcareMapViewState extends State<UniversalHealthcareMapView>
         }
 
         return Container(
-          color: isDark ? const Color(0xFF071D28) : const Color(0xFFE8F1F5),
+          color: isDark ? PharmaLensColors.mapBackgroundDark : PharmaLensColors.mapTileLight,
           child: GestureDetector(
             behavior: HitTestBehavior.opaque,
             onScaleStart: _onScaleStart,
@@ -430,7 +430,7 @@ class _MapPin extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final pinColor =
-        selected ? const Color(0xFFFF6F59) : PharmaLensColors.teal;
+        selected ? PharmaLensColors.mapPinSelected : PharmaLensColors.teal;
     final size = selected ? 48.0 : 38.0;
 
     return Column(

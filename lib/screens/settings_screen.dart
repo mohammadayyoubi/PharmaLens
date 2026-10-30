@@ -4,10 +4,12 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../app/app_settings_scope.dart';
 import '../l10n/app_localizations.dart';
+import '../l10n/app_text.dart';
 import '../services/moph_medicine_service.dart';
 import '../theme/pharmalens_theme.dart';
 import '../utils/formatters.dart';
 import '../widgets/chatbot_view.dart';
+import '../widgets/sync_progress.dart';
 
 class SettingsScreen
     extends StatefulWidget {
@@ -21,6 +23,105 @@ class SettingsScreen
   }
 }
 
+/// Who made the app: TechWrap LB, a Lebanese team, with its contacts.
+class _DeveloperCard extends StatelessWidget {
+  const _DeveloperCard({
+    required this.isArabic,
+    required this.developer,
+    required this.whatsApp,
+    required this.instagramHandle,
+    required this.onInstagram,
+  });
+
+  final bool isArabic;
+  final String developer;
+  final String whatsApp;
+  final String instagramHandle;
+  final VoidCallback onInstagram;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = PharmaLensTheme.paletteOf(context);
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: palette.surfaceSoft,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: palette.border),
+      ),
+      child: Column(
+        children: [
+          const _LebanonFlag(width: 42),
+          const SizedBox(height: 10),
+          Text(
+            appText(isArabic).developedBy(developer),
+            textAlign: TextAlign.center,
+            style: TextStyle(color: palette.textPrimary, fontSize: 14, fontWeight: FontWeight.w900),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            appText(isArabic).madeInLebanonByLebaneseDevelopers,
+            textAlign: TextAlign.center,
+            style: TextStyle(color: palette.textSecondary, fontSize: 12.5, height: 1.45, fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            alignment: WrapAlignment.center,
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              ActionChip(
+                avatar: const Icon(Icons.camera_alt_outlined, size: 18, color: PharmaLensColors.instagram),
+                label: Text('@$instagramHandle'),
+                onPressed: onInstagram,
+                tooltip: 'Instagram',
+              ),
+              Chip(
+                avatar: const Icon(Icons.chat_outlined, size: 18, color: PharmaLensColors.teal),
+                label: Text(whatsApp, textDirection: TextDirection.ltr),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The Lebanese flag: red bands, white middle, green cedar.
+class _LebanonFlag extends StatelessWidget {
+  const _LebanonFlag({required this.width});
+
+  final double width;
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(4),
+      child: SizedBox(
+        width: width,
+        height: width * 2 / 3,
+        child: Column(
+          children: [
+            Expanded(child: Container(color: PharmaLensColors.lebanonRed)),
+            Expanded(
+              flex: 2,
+              child: Container(
+                color: Colors.white,
+                alignment: Alignment.center,
+                child: Icon(Icons.park_rounded, color: PharmaLensColors.lebanonCedar, size: width * 0.38),
+              ),
+            ),
+            Expanded(child: Container(color: PharmaLensColors.lebanonRed)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _SettingsScreenState
     extends State<SettingsScreen> {
   static const String _whatsAppNumber =
@@ -31,12 +132,17 @@ class _SettingsScreenState
       '+961 70 080 214';
 
   static const String _developerTeam =
-      'TechWrap Development Team';
+      'TechWrap LB';
+
+  static const String _instagramHandle =
+      'techwrap.lb';
+
+  static const String _instagramUrl =
+      'https://www.instagram.com/techwrap.lb/';
 
   static const String _appVersion =
-      '1.0.0';
+      '1.1.0';
 
-  bool _isSyncingMoph = false;
 
   AppLocalizations get _l10n {
     return AppLocalizations.of(
@@ -49,13 +155,6 @@ class _SettingsScreenState
       context,
     ).languageCode.toLowerCase() ==
         'ar';
-  }
-
-  String _text({
-    required String en,
-    required String ar,
-  }) {
-    return _isArabic ? ar : en;
   }
 
   PharmaLensAppScope get _appScope {
@@ -268,12 +367,7 @@ class _SettingsScreenState
               ),
 
               Text(
-                _text(
-                  en:
-                  'Choose appearance',
-                  ar:
-                  'اختر المظهر',
-                ),
+                appText(_isArabic).chooseAppearance,
                 textAlign:
                 TextAlign.center,
                 style:
@@ -294,12 +388,7 @@ class _SettingsScreenState
               ),
 
               Text(
-                _text(
-                  en:
-                  'Choose light, dark, or follow the device appearance.',
-                  ar:
-                  'اختر الوضع الفاتح أو الداكن أو اتبع مظهر الجهاز.',
-                ),
+                appText(_isArabic).chooseLightDarkOrFollowThe,
                 textAlign:
                 TextAlign.center,
                 style:
@@ -323,19 +412,9 @@ class _SettingsScreenState
                 Icons
                     .light_mode_outlined,
                 title:
-                _text(
-                  en:
-                  'Light mode',
-                  ar:
-                  'الوضع الفاتح',
-                ),
+                appText(_isArabic).lightMode,
                 subtitle:
-                _text(
-                  en:
-                  'Bright medical interface',
-                  ar:
-                  'واجهة طبية فاتحة وواضحة',
-                ),
+                appText(_isArabic).brightMedicalInterface,
                 selected:
                 currentTheme ==
                     ThemeMode.light,
@@ -356,19 +435,9 @@ class _SettingsScreenState
                 Icons
                     .dark_mode_outlined,
                 title:
-                _text(
-                  en:
-                  'Dark mode',
-                  ar:
-                  'الوضع الداكن',
-                ),
+                appText(_isArabic).darkMode,
                 subtitle:
-                _text(
-                  en:
-                  'Comfortable dark interface',
-                  ar:
-                  'واجهة داكنة ومريحة',
-                ),
+                appText(_isArabic).comfortableDarkInterface,
                 selected:
                 currentTheme ==
                     ThemeMode.dark,
@@ -389,19 +458,9 @@ class _SettingsScreenState
                 Icons
                     .brightness_auto_outlined,
                 title:
-                _text(
-                  en:
-                  'System default',
-                  ar:
-                  'حسب النظام',
-                ),
+                appText(_isArabic).systemDefault,
                 subtitle:
-                _text(
-                  en:
-                  'Follow the device automatically',
-                  ar:
-                  'اتبع إعداد الجهاز تلقائيًا',
-                ),
+                appText(_isArabic).followTheDeviceAutomatically,
                 selected:
                 currentTheme ==
                     ThemeMode.system,
@@ -419,14 +478,24 @@ class _SettingsScreenState
     );
   }
 
+  Future<void> _openExternal(String url) async {
+    final uri = Uri.tryParse(url);
+    if (uri == null) return;
+    try {
+      final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (!opened && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(appText(_isArabic).couldNotOpenTheLink)),
+        );
+      }
+    } catch (error) {
+      debugPrint('Settings: could not open $url: $error');
+    }
+  }
+
   Future<void> _openWhatsApp() async {
     final message =
-    _text(
-      en:
-      'Hello, I am contacting you from PharmaLens.',
-      ar:
-      'مرحبًا، أتواصل معك من خلال تطبيق PharmaLens.',
-    );
+    appText(_isArabic).helloIAmContactingYouFrom;
 
     final uri =
     Uri.https(
@@ -448,12 +517,7 @@ class _SettingsScreenState
 
       if (!opened) {
         _showSafeMessage(
-          _text(
-            en:
-            'Could not open WhatsApp on this device.',
-            ar:
-            'تعذر فتح واتساب على هذا الجهاز.',
-          ),
+          appText(_isArabic).couldNotOpenWhatsappOnThis,
         );
       }
     } catch (
@@ -467,12 +531,7 @@ class _SettingsScreenState
       );
 
       _showSafeMessage(
-        _text(
-          en:
-          'Could not open WhatsApp on this device.',
-          ar:
-          'تعذر فتح واتساب على هذا الجهاز.',
-        ),
+        appText(_isArabic).couldNotOpenWhatsappOnThis,
       );
     }
   }
@@ -507,10 +566,17 @@ class _SettingsScreenState
                   height: 20,
                 ),
 
-                const _SheetIcon(
-                  icon:
-                  Icons
-                      .info_outline_rounded,
+                ClipRRect(
+                  borderRadius:
+                  BorderRadius.circular(
+                    18,
+                  ),
+                  child:
+                  Image.asset(
+                    'assets/branding/app_icon.png',
+                    width: 64,
+                    height: 64,
+                  ),
                 ),
 
                 const SizedBox(
@@ -518,12 +584,7 @@ class _SettingsScreenState
                 ),
 
                 Text(
-                  _text(
-                    en:
-                    'About PharmaLens',
-                    ar:
-                    'حول PharmaLens',
-                  ),
+                  appText(_isArabic).aboutPharmalens,
                   textAlign:
                   TextAlign.center,
                   style:
@@ -544,12 +605,7 @@ class _SettingsScreenState
                 ),
 
                 Text(
-                  _text(
-                    en:
-                    'PharmaLens is a medicine and prescription support application designed to help users and pharmacists review medicine information more safely.',
-                    ar:
-                    'PharmaLens هو تطبيق لدعم مراجعة الأدوية والوصفات، صُمم لمساعدة المستخدمين والصيادلة على مراجعة المعلومات الدوائية بشكل أكثر أمانًا.',
-                  ),
+                  appText(_isArabic).pharmalensIsAMedicineAndPrescription,
                   textAlign:
                   TextAlign.center,
                   style:
@@ -584,38 +640,12 @@ class _SettingsScreenState
                   height: 14,
                 ),
 
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                  decoration: BoxDecoration(
-                    color: palette.surfaceSoft,
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: palette.border),
-                  ),
-                  child: Column(
-                    children: [
-                      Text(
-                        _text(
-                          en: 'Developed by $_developerTeam',
-                          ar: 'تم التطوير بواسطة فريق تطوير TechWrap',
-                        ),
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          color: palette.textPrimary,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        _displayWhatsAppNumber,
-                        style: const TextStyle(
-                          color: PharmaLensColors.teal,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                    ],
-                  ),
+                _DeveloperCard(
+                  isArabic: _isArabic,
+                  developer: _developerTeam,
+                  whatsApp: _displayWhatsAppNumber,
+                  instagramHandle: _instagramHandle,
+                  onInstagram: () => _openExternal(_instagramUrl),
                 ),
 
                 const SizedBox(
@@ -634,12 +664,7 @@ class _SettingsScreenState
                     },
                     child:
                     Text(
-                      _text(
-                        en:
-                        'Done',
-                        ar:
-                        'تم',
-                      ),
+                      appText(_isArabic).done,
                     ),
                   ),
                 ),
@@ -652,27 +677,13 @@ class _SettingsScreenState
   }
 
   Future<void> _manualSyncMoph() async {
-    if (_isSyncingMoph) return;
-
-    setState(() {
-      _isSyncingMoph = true;
-    });
-
-    _showSafeMessage(
-      _text(
-        en: 'Checking MOPH Lebanon official dataset...',
-        ar: 'جارٍ التحقق من قاعدة بيانات وزارة الصحة العامة...',
-      ),
-    );
+    // The tile shows the progress and stays disabled until the check ends.
+    if (MophMedicineService().isSyncing) return;
 
     try {
       final result = await MophMedicineService().checkAndUpdateIfStale(force: true);
 
       if (!mounted) return;
-
-      setState(() {
-        _isSyncingMoph = false;
-      });
 
       _showSafeMessage(
         result.describe(
@@ -682,15 +693,8 @@ class _SettingsScreenState
     } catch (e) {
       if (!mounted) return;
 
-      setState(() {
-        _isSyncingMoph = false;
-      });
-
       _showSafeMessage(
-        _text(
-          en: 'Failed to sync with MOPH server. Using local dataset.',
-          ar: 'تعذرت المزامنة مع خادم الوزارة. يجري استخدام القاعدة المحلية.',
-        ),
+        appText(_isArabic).failedToSyncWithMophServer,
       );
     }
   }
@@ -721,28 +725,13 @@ class _SettingsScreenState
       ) {
     switch (themeMode) {
       case ThemeMode.light:
-        return _text(
-          en:
-          'Light',
-          ar:
-          'فاتح',
-        );
+        return appText(_isArabic).light;
 
       case ThemeMode.dark:
-        return _text(
-          en:
-          'Dark',
-          ar:
-          'داكن',
-        );
+        return appText(_isArabic).dark;
 
       case ThemeMode.system:
-        return _text(
-          en:
-          'System',
-          ar:
-          'حسب النظام',
-        );
+        return appText(_isArabic).system;
     }
   }
 
@@ -751,28 +740,13 @@ class _SettingsScreenState
       ) {
     switch (themeMode) {
       case ThemeMode.light:
-        return _text(
-          en:
-          'Light',
-          ar:
-          'فاتح',
-        );
+        return appText(_isArabic).light;
 
       case ThemeMode.dark:
-        return _text(
-          en:
-          'Dark',
-          ar:
-          'داكن',
-        );
+        return appText(_isArabic).dark;
 
       case ThemeMode.system:
-        return _text(
-          en:
-          'Auto',
-          ar:
-          'تلقائي',
-        );
+        return appText(_isArabic).auto;
     }
   }
 
@@ -869,12 +843,7 @@ class _SettingsScreenState
 
                   _SettingsSection(
                     title:
-                    _text(
-                      en:
-                      'Preferences',
-                      ar:
-                      'التفضيلات',
-                    ),
+                    appText(_isArabic).preferences,
                     children: [
                       _SettingsTile(
                         icon:
@@ -903,12 +872,7 @@ class _SettingsScreenState
                           appScope.themeMode,
                         ),
                         title:
-                        _text(
-                          en:
-                          'Appearance',
-                          ar:
-                          'المظهر',
-                        ),
+                        appText(_isArabic).appearance,
                         subtitle:
                         _appearanceLabel(
                           appScope.themeMode,
@@ -932,24 +896,14 @@ class _SettingsScreenState
 
                   _SettingsSection(
                     title:
-                    _text(
-                      en:
-                      'Contact',
-                      ar:
-                      'تواصل معنا',
-                    ),
+                    appText(_isArabic).contact2,
                     children: [
                       _SettingsTile(
                         icon:
                         Icons
                             .chat_rounded,
                         title:
-                        _text(
-                          en:
-                          'Contact on WhatsApp',
-                          ar:
-                          'تواصل عبر واتساب',
-                        ),
+                        appText(_isArabic).contactOnWhatsapp,
                         subtitle:
                         _displayWhatsAppNumber,
                         forceLtrSubtitle:
@@ -968,45 +922,25 @@ class _SettingsScreenState
 
                   _SettingsSection(
                     title:
-                    _text(
-                      en:
-                      'Data & Sync',
-                      ar:
-                      'البيانات والمزامنة',
-                    ),
+                    appText(_isArabic).dataSync,
                     children: [
-                      _SettingsTile(
-                        icon:
-                        Icons.sync_rounded,
-                        title:
-                        _text(
-                          en:
-                          'Sync MOPH Medicine Data',
-                          ar:
-                          'مزامنة بيانات أدوية وزارة الصحة',
-                        ),
-                        subtitle:
-                        _isSyncingMoph
-                            ? _text(
-                                en: 'Syncing in progress...',
-                                ar: 'جارٍ التحديث...',
-                              )
-                            : _text(
-                                en: 'MOPH list of ${MophMedicineService().publishedDate} · ${formatCount(MophMedicineService().totalMedicineCount)} medicines',
-                                ar: 'لائحة وزارة الصحة بتاريخ ${MophMedicineService().publishedDate} · ${formatCount(MophMedicineService().totalMedicineCount)} دواء',
-                              ),
-                        trailing: _isSyncingMoph
-                            ? const SizedBox(
-                                width: 20,
-                                height: 20,
-                                child: CircularProgressIndicator(strokeWidth: 2),
-                              )
-                            : Icon(
-                                Icons.refresh_rounded,
-                                color: PharmaLensColors.teal,
-                                size: 20,
-                              ),
-                        onTap: _isSyncingMoph ? null : _manualSyncMoph,
+                      ValueListenableBuilder<MophSyncProgress>(
+                        valueListenable: MophMedicineService().progress,
+                        builder: (context, progress, _) {
+                          final busy = progress.busy || MophMedicineService().isSyncing;
+                          return _SettingsTile(
+                            icon: Icons.sync_rounded,
+                            title: appText(_isArabic).syncMophMedicineData,
+                            subtitle: busy
+                                ? '${progress.busy ? progress.label(isArabic: _isArabic) : appText(_isArabic).syncingInProgress} ${progress.percent}%'
+                                : appText(_isArabic).mophListOfMedicines(MophMedicineService().publishedDate, formatCount(MophMedicineService().totalMedicineCount)),
+                            trailing: MophSyncButton(
+                              tooltip: appText(_isArabic).syncNow,
+                              onPressed: _manualSyncMoph,
+                            ),
+                            onTap: busy ? null : _manualSyncMoph,
+                          );
+                        },
                       ),
                     ],
                   ),
@@ -1017,31 +951,16 @@ class _SettingsScreenState
 
                   _SettingsSection(
                     title:
-                    _text(
-                      en:
-                      'About',
-                      ar:
-                      'حول التطبيق',
-                    ),
+                    appText(_isArabic).about,
                     children: [
                       _SettingsTile(
                         icon:
                         Icons
                             .info_outline_rounded,
                         title:
-                        _text(
-                          en:
-                          'About PharmaLens',
-                          ar:
-                          'حول PharmaLens',
-                        ),
+                        appText(_isArabic).aboutPharmalens,
                         subtitle:
-                        _text(
-                          en:
-                          'Version $_appVersion • $_developerTeam',
-                          ar:
-                          'الإصدار $_appVersion • فريق $_developerTeam',
-                        ),
+                        appText(_isArabic).version(_appVersion, _developerTeam),
                         onTap:
                         _openAbout,
                       ),
@@ -1159,12 +1078,7 @@ class _SettingsScreenState
               ),
 
               Text(
-                _text(
-                  en:
-                  'Language, appearance and application information',
-                  ar:
-                  'اللغة والمظهر ومعلومات التطبيق',
-                ),
+                appText(_isArabic).languageAppearanceAndApplicationInformation,
                 style:
                 TextStyle(
                   color:
@@ -1278,12 +1192,7 @@ class _SettingsScreenState
                 ),
 
                 Text(
-                  _text(
-                    en:
-                    'Medicine and prescription support with safety-first verification.',
-                    ar:
-                    'دعم للأدوية والوصفات مع تحقق يعتمد السلامة أولًا.',
-                  ),
+                  appText(_isArabic).medicineAndPrescriptionSupportWithSafety,
                   style:
                   TextStyle(
                     color:
@@ -1388,12 +1297,7 @@ class _SettingsScreenState
               CrossAxisAlignment.start,
               children: [
                 Text(
-                  _text(
-                    en:
-                    'Medical disclaimer',
-                    ar:
-                    'تنبيه طبي',
-                  ),
+                  appText(_isArabic).medicalDisclaimer2,
                   style:
                   const TextStyle(
                     color:

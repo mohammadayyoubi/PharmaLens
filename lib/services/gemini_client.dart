@@ -6,12 +6,54 @@ import 'package:http/http.dart' as http;
 
 import '../private/api_keys.dart';
 
-/// Shared Gemini configuration: API keys, model order and per-model request
-/// settings. Every Gemini caller in the app should build its
-/// `generationConfig` here so thinking and temperature stay correct when the
-/// model list changes.
+/// Why a Gemini request failed, for user-facing messages.
+enum GeminiErrorKind { notConfigured, rateLimited, timeout, unauthorized, badResponse, unavailable }
+
+class GeminiException implements Exception {
+  const GeminiException(this.kind, [this.detail = '']);
+
+  final GeminiErrorKind kind;
+
+  /// Diagnostic text for logs. Never contains an API key.
+  final String detail;
+
+  @override
+  String toString() => 'GeminiException(${kind.name}): $detail';
+}
+
+/// A tool the model may call during [GeminiClient.chatWithTools].
+class GeminiTool {
+  const GeminiTool({required this.name, required this.description, this.parameters});
+
+  final String name;
+  final String description;
+
+  /// OpenAPI-style schema of the arguments (type OBJECT), or null for none.
+  final Map<String, dynamic>? parameters;
+
+  Map<String, dynamic> toDeclaration() => <String, dynamic>{
+        'name': name,
+        'description': description,
+        if (parameters != null) 'parameters': parameters,
+      };
+}
+
+/// The final answer of a tool conversation and the tools it used.
+class GeminiToolRun {
+  const GeminiToolRun({required this.text, required this.toolsUsed, required this.model});
+
+  final String text;
+  final List<String> toolsUsed;
+  final String model;
+}
+
+/// The one place for Gemini keys, model order, request settings and the
+/// model/key fallback loop. Every Gemini caller in the app (prescription
+/// reading, chat, medicine information) goes through this class.
 class GeminiClient {
-  const GeminiClient();
+  const GeminiClient({http.Client? httpClient}) : _httpClient = httpClient;
+
+  final http.Client? _httpClient;
 
   static const String _apiKeysFromTerminal = String.fromEnvironment('GEMINI_API_KEYS');
   static const String _singleApiKeyFromTerminal = String.fromEnvironment('GEMINI_API_KEY');
@@ -79,9 +121,98 @@ class GeminiClient {
     };
   }
 
-  /// Sends [parts] to each configured model and key in turn until one returns
-  /// JSON. Gives up when [totalBudget] is spent, so a slow model cannot keep
-  /// the caller waiting for every fallback in a row.
+  /// Posts a generateContent request built by [body] for each model and key
+  /// in turn until [parse] accepts a response. [parse] may throw a
+  /// [FormatException] to reject an answer (the next model is then tried).
+  /// Gives up when [totalBudget] is spent, so a slow model cannot keep the
+  /// caller waiting for every fallback in a row.
+  Future<(T, String)> send<T>({
+    required Map<String, dynamic> Function(String model) body,
+    required T Function(Map<String, dynamic> response) parse,
+    Duration requestTimeout = const Duration(seconds: 40),
+    Duration totalBudget = const Duration(seconds: 75),
+    List<String>? onlyModels,
+  }) async {
+    final keys = apiKeys;
+    final modelList = onlyModels ?? models;
+    if (keys.isEmpty || modelList.isEmpty) {
+      throw const GeminiException(GeminiErrorKind.notConfigured, 'No Gemini key or model is configured.');
+    }
+
+    final client = _httpClient ?? http.Client();
+    final stopwatch = Stopwatch()..start();
+    var lastKind = GeminiErrorKind.unavailable;
+    var lastDetail = '';
+
+    try {
+      for (final model in modelList) {
+        keyLoop:
+        for (var keyIndex = 0; keyIndex < keys.length; keyIndex++) {
+          final remaining = totalBudget - stopwatch.elapsed;
+          if (remaining < const Duration(seconds: 4)) {
+            throw GeminiException(GeminiErrorKind.timeout, 'Budget of ${totalBudget.inSeconds}s spent. Last: $lastDetail');
+          }
+
+          try {
+            final response = await client
+                .post(
+                  Uri.parse('https://generativelanguage.googleapis.com/v1beta/models/$model:generateContent'),
+                  headers: <String, String>{'Content-Type': 'application/json', 'x-goog-api-key': keys[keyIndex]},
+                  body: jsonEncode(body(model)),
+                )
+                .timeout(remaining < requestTimeout ? remaining : requestTimeout);
+
+            final status = response.statusCode;
+            if (status >= 200 && status < 300) {
+              final decoded = jsonDecode(utf8.decode(response.bodyBytes));
+              if (decoded is! Map) throw const FormatException('Response is not a JSON object.');
+              return (parse(Map<String, dynamic>.from(decoded)), model);
+            }
+
+            lastDetail = 'model $model, key ${keyIndex + 1}: HTTP $status';
+            final badKey = status == 401 || status == 403 || (status == 400 && response.body.contains('API_KEY'));
+            if (badKey) {
+              lastKind = GeminiErrorKind.unauthorized;
+              continue keyLoop;
+            }
+            if (status == 429) {
+              // Quota is per key (and per project): another key may have room.
+              lastKind = GeminiErrorKind.rateLimited;
+              continue keyLoop;
+            }
+            // 400 (a setting this model rejects), 404 (unknown model) and
+            // 5xx (overloaded) are model-wide: another key will not help.
+            lastKind = status >= 500 ? GeminiErrorKind.unavailable : GeminiErrorKind.badResponse;
+            break keyLoop;
+          } on TimeoutException {
+            lastKind = GeminiErrorKind.timeout;
+            lastDetail = 'model $model timed out';
+            break keyLoop;
+          } on FormatException catch (error) {
+            lastKind = GeminiErrorKind.badResponse;
+            lastDetail = 'model $model: ${error.message}';
+            break keyLoop;
+          } on GeminiException {
+            rethrow;
+          } catch (error) {
+            // Network errors: the next key will fail the same way, try the
+            // next model only once the connection may have recovered.
+            lastKind = GeminiErrorKind.unavailable;
+            lastDetail = 'model $model: ${error.runtimeType}';
+            break keyLoop;
+          }
+        }
+      }
+    } finally {
+      if (_httpClient == null) client.close();
+    }
+
+    debugPrint('GeminiClient: all attempts failed ($lastKind): $lastDetail');
+    throw GeminiException(lastKind, lastDetail);
+  }
+
+  /// Sends [parts] and returns the JSON object the model wrote, shaped by
+  /// [responseSchema].
   Future<Map<String, dynamic>> generateJson({
     required List<Map<String, dynamic>> parts,
     required Map<String, dynamic> responseSchema,
@@ -89,65 +220,135 @@ class GeminiClient {
     Duration requestTimeout = const Duration(seconds: 40),
     Duration totalBudget = const Duration(seconds: 75),
   }) async {
-    final keys = apiKeys;
-    final modelList = models;
-    if (keys.isEmpty || modelList.isEmpty) {
-      throw StateError('Gemini is not configured.');
-    }
+    final (json, _) = await send<Map<String, dynamic>>(
+      body: (model) => <String, dynamic>{
+        'contents': <Map<String, dynamic>>[
+          <String, dynamic>{'role': 'user', 'parts': parts},
+        ],
+        'generationConfig': generationConfig(
+          model: model,
+          maxOutputTokens: maxOutputTokens,
+          responseSchema: responseSchema,
+        ),
+      },
+      parse: (response) => decodeJsonObject(extractText(response)),
+      requestTimeout: requestTimeout,
+      totalBudget: totalBudget,
+    );
+    return json;
+  }
 
+  /// A conversation in which the model may call [tools]. Each requested
+  /// call is run through [runTool] and its result sent back, until the model
+  /// writes a final answer or [maxToolRounds] is reached.
+  ///
+  /// Once a model answers, the rest of the conversation stays on that model:
+  /// Gemini 3 attaches thought signatures to function calls that only the
+  /// same model accepts back.
+  Future<GeminiToolRun> chatWithTools({
+    required String systemInstruction,
+    required List<Map<String, dynamic>> contents,
+    required List<GeminiTool> tools,
+    required Future<Map<String, dynamic>> Function(String name, Map<String, dynamic> args) runTool,
+    void Function(String name)? onToolCall,
+    int maxOutputTokens = 4096,
+    int maxToolRounds = 5,
+    Duration requestTimeout = const Duration(seconds: 40),
+    Duration totalBudget = const Duration(seconds: 90),
+  }) async {
     final stopwatch = Stopwatch()..start();
-    Object? lastError;
+    final history = List<Map<String, dynamic>>.of(contents);
+    final used = <String>[];
+    String? model;
 
-    for (final model in modelList) {
-      for (final key in keys) {
-        final remaining = totalBudget - stopwatch.elapsed;
-        if (remaining < const Duration(seconds: 5)) {
-          throw TimeoutException('Gemini did not answer in time.', totalBudget);
-        }
+    for (var round = 0; round <= maxToolRounds; round++) {
+      final lastRound = round == maxToolRounds;
+      final remaining = totalBudget - stopwatch.elapsed;
 
-        try {
-          final response = await http
-              .post(
-                Uri.parse('https://generativelanguage.googleapis.com/v1beta/models/$model:generateContent'),
-                headers: <String, String>{'Content-Type': 'application/json', 'x-goog-api-key': key},
-                body: jsonEncode(<String, dynamic>{
-                  'contents': <Map<String, dynamic>>[
-                    <String, dynamic>{'role': 'user', 'parts': parts},
-                  ],
-                  'generationConfig': generationConfig(
-                    model: model,
-                    maxOutputTokens: maxOutputTokens,
-                    responseSchema: responseSchema,
-                  ),
-                }),
-              )
-              .timeout(remaining < requestTimeout ? remaining : requestTimeout);
+      final (content, answeredBy) = await send<Map<String, dynamic>>(
+        onlyModels: model == null ? null : <String>[model],
+        requestTimeout: requestTimeout,
+        totalBudget: remaining,
+        body: (name) => <String, dynamic>{
+          'systemInstruction': <String, dynamic>{
+            'parts': <Map<String, dynamic>>[
+              <String, dynamic>{'text': systemInstruction},
+            ],
+          },
+          'contents': history,
+          if (tools.isNotEmpty) ...<String, dynamic>{
+            'tools': <Map<String, dynamic>>[
+              <String, dynamic>{'functionDeclarations': tools.map((t) => t.toDeclaration()).toList()},
+            ],
+            // On the last round the model must answer with what it has.
+            'toolConfig': <String, dynamic>{
+              'functionCallingConfig': <String, dynamic>{'mode': lastRound ? 'NONE' : 'AUTO'},
+            },
+          },
+          'generationConfig': generationConfig(model: name, maxOutputTokens: maxOutputTokens, legacyTemperature: 0.3),
+        },
+        parse: _candidateContent,
+      );
+      model = answeredBy;
 
-          final badKey = response.statusCode == 400 && response.body.contains('API_KEY');
-          if ((response.statusCode == 404 || response.statusCode == 400) && !badKey) {
-            // Unknown model name or a setting this model rejects: the next
-            // model may work, another key will not.
-            lastError = 'Model $model returned ${response.statusCode}';
-            break;
-          }
-          if (response.statusCode < 200 || response.statusCode >= 300) {
-            lastError = 'Model $model returned ${response.statusCode}';
-            continue;
-          }
+      final parts = (content['parts'] as List).whereType<Map>().toList();
+      final calls = parts.where((part) => part['functionCall'] is Map).toList();
 
-          return decodeJsonObject(extractText(jsonDecode(response.body)));
-        } on TimeoutException catch (error) {
-          // Timeouts are not key-specific; move on to the next model.
-          lastError = error;
-          break;
-        } catch (error) {
-          lastError = error;
-        }
+      if (calls.isEmpty) {
+        final text = parts
+            .where((part) => part['thought'] != true)
+            .map((part) => '${part['text'] ?? ''}')
+            .join()
+            .trim();
+        if (text.isEmpty) throw const GeminiException(GeminiErrorKind.badResponse, 'Empty answer.');
+        return GeminiToolRun(text: text, toolsUsed: used, model: answeredBy);
       }
+
+      // Keep the model turn exactly as sent, thought signatures included.
+      history.add(<String, dynamic>{'role': 'model', 'parts': parts});
+
+      final responses = <Map<String, dynamic>>[];
+      for (final part in calls) {
+        final call = Map<String, dynamic>.from(part['functionCall'] as Map);
+        final name = '${call['name'] ?? ''}';
+        final args = call['args'] is Map ? Map<String, dynamic>.from(call['args'] as Map) : <String, dynamic>{};
+        onToolCall?.call(name);
+        used.add(name);
+
+        Map<String, dynamic> result;
+        try {
+          result = await runTool(name, args);
+        } catch (error) {
+          debugPrint('GeminiClient: tool $name failed: $error');
+          result = <String, dynamic>{'error': 'The tool could not run: ${error.runtimeType}.'};
+        }
+
+        responses.add(<String, dynamic>{
+          'functionResponse': <String, dynamic>{
+            if (call['id'] != null) 'id': call['id'],
+            'name': name,
+            'response': result,
+          },
+        });
+      }
+      history.add(<String, dynamic>{'role': 'user', 'parts': responses});
     }
 
-    debugPrint('GeminiClient: all attempts failed: $lastError');
-    throw Exception('Gemini request failed: $lastError');
+    throw const GeminiException(GeminiErrorKind.badResponse, 'No final answer.');
+  }
+
+  static Map<String, dynamic> _candidateContent(Map<String, dynamic> response) {
+    final candidates = response['candidates'];
+    if (candidates is List && candidates.isNotEmpty && candidates.first is Map) {
+      final candidate = candidates.first as Map;
+      final content = candidate['content'];
+      if (content is Map && content['parts'] is List && (content['parts'] as List).isNotEmpty) {
+        return Map<String, dynamic>.from(content);
+      }
+      throw FormatException('No content. Finish reason: ${candidate['finishReason']}');
+    }
+    final blocked = response['promptFeedback'];
+    throw FormatException(blocked == null ? 'No candidates.' : 'Prompt blocked: $blocked');
   }
 
   static String extractText(Object? decoded) {
@@ -168,11 +369,11 @@ class GeminiClient {
         }
         final finishReason = (candidates.first as Map)['finishReason'];
         if (finishReason != null) {
-          throw Exception('Gemini returned no text. Finish reason: $finishReason');
+          throw FormatException('Gemini returned no text. Finish reason: $finishReason');
         }
       }
     }
-    throw Exception('No text output returned from Gemini.');
+    throw const FormatException('No text output returned from Gemini.');
   }
 
   static Map<String, dynamic> decodeJsonObject(String text) {
@@ -182,9 +383,13 @@ class GeminiClient {
       decoded = jsonDecode(cleaned);
     } catch (_) {
       final match = RegExp(r'\{[\s\S]*\}').firstMatch(cleaned);
-      if (match != null) decoded = jsonDecode(match.group(0)!);
+      if (match != null) {
+        try {
+          decoded = jsonDecode(match.group(0)!);
+        } catch (_) {}
+      }
     }
     if (decoded is Map) return Map<String, dynamic>.from(decoded);
-    throw Exception('Gemini did not return valid JSON.');
+    throw const FormatException('Gemini did not return valid JSON.');
   }
 }

@@ -8,7 +8,9 @@ import 'app/app_settings_scope.dart';
 import 'app/app_shell.dart';
 import 'l10n/app_localizations.dart';
 import 'services/connectivity_service.dart';
+import 'screens/onboarding_screen.dart';
 import 'services/doctors_service.dart';
+import 'services/dose_log_service.dart';
 import 'services/health_profile_service.dart';
 import 'services/moph_medicine_service.dart';
 import 'services/prescription_history_service.dart';
@@ -18,22 +20,44 @@ import 'theme/pharmalens_theme.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Both parse their CSV in a background isolate and never throw; a load
-  // failure is reported through their loadError getters.
-  await Future.wait<void>(<Future<void>>[
-    MophMedicineService().initialize(),
-    DoctorsService().initialize(),
-  ]);
-
-  unawaited(ConnectivityService().start());
-  // New MOPH lists are published by .github/workflows/update-moph-prices.yml.
-  MophMedicineService().startAutoUpdates();
-  unawaited(PrescriptionHistoryService().load());
-  unawaited(HealthProfileService().load());
-  unawaited(ReminderService().load());
-
+  // Draw first; load data behind the splash. Screens that need the medicine
+  // list await MophMedicineService().initialize() or listen to its
+  // `changes`, so nothing waits for data it does not use.
   runApp(
     const PharmaLensApp(),
+  );
+
+  // Parses its CSV in a background isolate and never throws; a load failure
+  // is reported through loadError. New MOPH lists are published by
+  // .github/workflows/update-moph-prices.yml.
+  unawaited(
+    MophMedicineService().initialize().then(
+          (_) => MophMedicineService().startAutoUpdates(),
+    ),
+  );
+  unawaited(ConnectivityService().start());
+  unawaited(PrescriptionHistoryService().load());
+  // Reminder titles name the family member ("Mom · Time for ..."), so the
+  // profiles load before the reminders are scheduled.
+  ReminderService().personName = (profileId) {
+    final person = HealthProfileService().byId(profileId);
+    return person == null || person.isOwner ? '' : person.name;
+  };
+  unawaited(
+    HealthProfileService().load().then(
+          (_) => ReminderService().load(),
+    ),
+  );
+  unawaited(DoseLogService().load());
+
+  // The doctors list (18,000 rows) is only used by the Doctors tab and the
+  // assistant; parse it once the first screens are up and the medicine list
+  // has loaded.
+  unawaited(
+    Future<void>.delayed(
+      const Duration(seconds: 5),
+      DoctorsService().initialize,
+    ),
   );
 }
 
@@ -75,6 +99,9 @@ class _PharmaLensAppState
   bool _settingsLoaded =
   false;
 
+  bool _onboarded =
+  true;
+
   @override
   void initState() {
     super.initState();
@@ -88,6 +115,9 @@ class _PharmaLensAppState
 
     var nextLocale =
     _deviceLocale();
+
+    var onboarded =
+    true;
 
     try {
       final preferences =
@@ -120,6 +150,12 @@ class _PharmaLensAppState
               savedLanguageCode,
             );
       }
+
+      onboarded =
+          preferences.getBool(
+            OnboardingScreen.seenKey,
+          ) ??
+              false;
     } catch (
     error,
     stackTrace
@@ -144,6 +180,9 @@ class _PharmaLensAppState
 
       _settingsLoaded =
       true;
+
+      _onboarded =
+          onboarded;
     });
   }
 
@@ -360,8 +399,10 @@ class _PharmaLensAppState
               .clamp(
             minScaleFactor:
             0.85,
+            // Large text for low-vision users; layouts wrap instead of
+            // clipping (see test/app_shell_test.dart).
             maxScaleFactor:
-            1.30,
+            1.60,
           );
 
           return MediaQuery(
@@ -377,9 +418,18 @@ class _PharmaLensAppState
         },
 
         home:
-        _settingsLoaded
+        !_settingsLoaded
+            ? const _StartupScreen()
+            : _onboarded
             ? const AppShell()
-            : const _StartupScreen(),
+            : OnboardingScreen(
+          onDone: () {
+            setState(() {
+              _onboarded =
+              true;
+            });
+          },
+        ),
       ),
     );
   }
@@ -389,37 +439,22 @@ class _StartupScreen
     extends StatelessWidget {
   const _StartupScreen();
 
+  /// Matches the native splash (logo on deep navy) so the hand-over from
+  /// the platform splash to Flutter is invisible.
   @override
   Widget build(
       BuildContext context,
       ) {
-    final palette =
-    PharmaLensTheme.paletteOf(
-      context,
-    );
-
-    return Scaffold(
+    return const Scaffold(
       backgroundColor:
-      palette.background,
-      body: DecoratedBox(
-        decoration:
-        BoxDecoration(
-          gradient:
-          palette.pageGradient,
-        ),
-        child:
-        const SafeArea(
-          child: Center(
-            child: SizedBox(
-              width: 36,
-              height: 36,
-              child:
-              CircularProgressIndicator(
-                strokeWidth:
-                3,
-              ),
-            ),
+      PharmaLensColors.splashBackground,
+      body: Center(
+        child: Image(
+          image: AssetImage(
+            'assets/branding/app_icon.png',
           ),
+          width: 96,
+          height: 96,
         ),
       ),
     );

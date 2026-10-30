@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../l10n/app_text.dart';
 import '../models/nearby_healthcare_place.dart';
 import '../services/nearby_healthcare_service.dart';
 import '../theme/pharmalens_theme.dart';
@@ -66,15 +67,6 @@ class _PharmaciesMapScreenState extends State<PharmaciesMapScreen> {
     return _isArabic
         ? 'ar'
         : 'en';
-  }
-
-  String _text({
-    required String en,
-    required String ar,
-  }) {
-    return _isArabic
-        ? ar
-        : en;
   }
 
   @override
@@ -226,12 +218,7 @@ class _PharmaciesMapScreenState extends State<PharmaciesMapScreen> {
 
         if (nearest.isEmpty) {
           _errorMessage =
-              _text(
-                en:
-                'No pharmacies were found within 5 km.',
-                ar:
-                'لم يتم العثور على صيدليات ضمن 5 كم.',
-              );
+              appText(_isArabic).noPharmaciesWereFoundWithin5;
         }
       });
 
@@ -315,12 +302,7 @@ class _PharmaciesMapScreenState extends State<PharmaciesMapScreen> {
         false;
 
         _errorMessage =
-            _text(
-              en:
-              'Nearby healthcare search is temporarily unavailable. Please try again.',
-              ar:
-              'البحث عن خدمات الرعاية الصحية القريبة غير متاح مؤقتًا. يرجى إعادة المحاولة.',
-            );
+            appText(_isArabic).nearbyHealthcareSearchIsTemporarilyUnavailable;
       });
     }
   }
@@ -351,12 +333,7 @@ class _PharmaciesMapScreenState extends State<PharmaciesMapScreen> {
       );
 
       throw _LocationAccessException(
-        _text(
-          en:
-          'Your location could not be accessed.',
-          ar:
-          'تعذر الوصول إلى موقعك.',
-        ),
+        appText(_isArabic).yourLocationCouldNotBeAccessed,
       );
     }
 
@@ -366,12 +343,7 @@ class _PharmaciesMapScreenState extends State<PharmaciesMapScreen> {
       }
 
       throw _LocationAccessException(
-        _text(
-          en:
-          'Location services are disabled. Enable GPS to find nearby healthcare services.',
-          ar:
-          'خدمات الموقع متوقفة. فعّل GPS للعثور على خدمات الرعاية الصحية القريبة.',
-        ),
+        appText(_isArabic).locationServicesAreDisabledEnableGps,
       );
     }
 
@@ -399,24 +371,14 @@ class _PharmaciesMapScreenState extends State<PharmaciesMapScreen> {
       );
 
       throw _LocationAccessException(
-        _text(
-          en:
-          'Location permission could not be checked.',
-          ar:
-          'تعذر التحقق من صلاحية الموقع.',
-        ),
+        appText(_isArabic).locationPermissionCouldNotBeChecked,
       );
     }
 
     if (permission ==
         LocationPermission.denied) {
       throw _LocationAccessException(
-        _text(
-          en:
-          'Location permission is required to find nearby pharmacies and medical centers.',
-          ar:
-          'صلاحية الموقع مطلوبة للعثور على الصيدليات والمراكز الطبية القريبة.',
-        ),
+        appText(_isArabic).locationPermissionIsRequiredToFind,
       );
     }
 
@@ -427,12 +389,7 @@ class _PharmaciesMapScreenState extends State<PharmaciesMapScreen> {
       }
 
       throw _LocationAccessException(
-        _text(
-          en:
-          'Location permission is blocked. Enable it from app settings.',
-          ar:
-          'صلاحية الموقع محظورة. فعّلها من إعدادات التطبيق.',
-        ),
+        appText(_isArabic).locationPermissionIsBlockedEnableIt,
       );
     }
 
@@ -481,12 +438,7 @@ class _PharmaciesMapScreenState extends State<PharmaciesMapScreen> {
       }
 
       throw _LocationAccessException(
-        _text(
-          en:
-          'Your current location could not be determined. Check GPS and try again.',
-          ar:
-          'تعذر تحديد موقعك الحالي. تحقق من GPS وحاول مرة أخرى.',
-        ),
+        appText(_isArabic).yourCurrentLocationCouldNotBe,
       );
     }
   }
@@ -559,12 +511,7 @@ class _PharmaciesMapScreenState extends State<PharmaciesMapScreen> {
         _userPosition;
 
     if (position == null) {
-      return _text(
-        en:
-        'Nearby',
-        ar:
-        'قريب',
-      );
+      return appText(_isArabic).nearby;
     }
 
     final meters =
@@ -575,38 +522,24 @@ class _PharmaciesMapScreenState extends State<PharmaciesMapScreen> {
 
     if (meters <
         1000) {
-      return _isArabic
-          ? '${meters.round()} م'
-          : '${meters.round()} m';
+      return appText(_isArabic).m(meters.round());
     }
 
     final kilometers =
         meters /
             1000;
 
-    return _isArabic
-        ? '${kilometers.toStringAsFixed(1)} كم'
-        : '${kilometers.toStringAsFixed(1)} km';
+    return appText(_isArabic).km(kilometers.toStringAsFixed(1));
   }
 
   String _kindLabel(
       NearbyHealthcarePlace place,
       ) {
     if (place.isPharmacy) {
-      return _text(
-        en:
-        'Pharmacy',
-        ar:
-        'صيدلية',
-      );
+      return appText(_isArabic).pharmacy;
     }
 
-    return _text(
-      en:
-      'Medical center',
-      ar:
-      'مركز طبي',
-    );
+    return appText(_isArabic).medicalCenter;
   }
 
   String _openingLabel(
@@ -614,20 +547,10 @@ class _PharmaciesMapScreenState extends State<PharmaciesMapScreen> {
       ) {
     switch (place.openNow) {
       case true:
-        return _text(
-          en:
-          'Open now',
-          ar:
-          'مفتوح الآن',
-        );
+        return appText(_isArabic).openNow;
 
       case false:
-        return _text(
-          en:
-          'Closed now',
-          ar:
-          'مغلق الآن',
-        );
+        return appText(_isArabic).closedNow;
 
       case null:
         return '';
@@ -665,12 +588,7 @@ class _PharmaciesMapScreenState extends State<PharmaciesMapScreen> {
     await _launchExternalUri(
       uri,
       failureMessage:
-      _text(
-        en:
-        'Could not open directions.',
-        ar:
-        'تعذر فتح الطريق.',
-      ),
+      appText(_isArabic).couldNotOpenDirections,
     );
   }
 
@@ -682,12 +600,7 @@ class _PharmaciesMapScreenState extends State<PharmaciesMapScreen> {
 
     if (phone.isEmpty) {
       _showMessage(
-        _text(
-          en:
-          'No phone number is available for this location.',
-          ar:
-          'لا يوجد رقم هاتف متاح لهذا المكان.',
-        ),
+        appText(_isArabic).noPhoneNumberIsAvailableFor,
       );
 
       return;
@@ -701,12 +614,7 @@ class _PharmaciesMapScreenState extends State<PharmaciesMapScreen> {
         phone,
       ),
       failureMessage:
-      _text(
-        en:
-        'Could not open the phone application.',
-        ar:
-        'تعذر فتح تطبيق الهاتف.',
-      ),
+      appText(_isArabic).couldNotOpenThePhoneApplication,
     );
   }
 
@@ -784,12 +692,7 @@ class _PharmaciesMapScreenState extends State<PharmaciesMapScreen> {
           Colors.transparent,
           title:
           Text(
-            _text(
-              en:
-              'Enable location',
-              ar:
-              'تفعيل الموقع',
-            ),
+            appText(_isArabic).enableLocation,
             style:
             TextStyle(
               color:
@@ -800,12 +703,7 @@ class _PharmaciesMapScreenState extends State<PharmaciesMapScreen> {
           ),
           content:
           Text(
-            _text(
-              en:
-              'Enable GPS to find the closest pharmacies and medical centers.',
-              ar:
-              'فعّل GPS للعثور على أقرب الصيدليات والمراكز الطبية.',
-            ),
+            appText(_isArabic).enableGpsToFindTheClosest,
             style:
             TextStyle(
               color:
@@ -825,12 +723,7 @@ class _PharmaciesMapScreenState extends State<PharmaciesMapScreen> {
               },
               child:
               Text(
-                _text(
-                  en:
-                  'Cancel',
-                  ar:
-                  'إلغاء',
-                ),
+                appText(_isArabic).cancel,
               ),
             ),
             FilledButton(
@@ -855,12 +748,7 @@ class _PharmaciesMapScreenState extends State<PharmaciesMapScreen> {
               },
               child:
               Text(
-                _text(
-                  en:
-                  'Open settings',
-                  ar:
-                  'فتح الإعدادات',
-                ),
+                appText(_isArabic).openSettings,
               ),
             ),
           ],
@@ -889,12 +777,7 @@ class _PharmaciesMapScreenState extends State<PharmaciesMapScreen> {
           Colors.transparent,
           title:
           Text(
-            _text(
-              en:
-              'Location permission',
-              ar:
-              'صلاحية الموقع',
-            ),
+            appText(_isArabic).locationPermission,
             style:
             TextStyle(
               color:
@@ -905,12 +788,7 @@ class _PharmaciesMapScreenState extends State<PharmaciesMapScreen> {
           ),
           content:
           Text(
-            _text(
-              en:
-              'Location permission is blocked. Enable it from app settings.',
-              ar:
-              'صلاحية الموقع محظورة. فعّلها من إعدادات التطبيق.',
-            ),
+            appText(_isArabic).locationPermissionIsBlockedEnableIt,
             style:
             TextStyle(
               color:
@@ -930,12 +808,7 @@ class _PharmaciesMapScreenState extends State<PharmaciesMapScreen> {
               },
               child:
               Text(
-                _text(
-                  en:
-                  'Cancel',
-                  ar:
-                  'إلغاء',
-                ),
+                appText(_isArabic).cancel,
               ),
             ),
             FilledButton(
@@ -960,12 +833,7 @@ class _PharmaciesMapScreenState extends State<PharmaciesMapScreen> {
               },
               child:
               Text(
-                _text(
-                  en:
-                  'Open settings',
-                  ar:
-                  'فتح الإعدادات',
-                ),
+                appText(_isArabic).openSettings,
               ),
             ),
           ],
@@ -1104,12 +972,7 @@ class _PharmaciesMapScreenState extends State<PharmaciesMapScreen> {
 
                     Expanded(
                       child: Text(
-                        _text(
-                          en:
-                          'Nearby healthcare',
-                          ar:
-                          'الرعاية الصحية القريبة',
-                        ),
+                        appText(_isArabic).nearbyHealthcare,
                         maxLines:
                         1,
                         overflow:
@@ -1150,6 +1013,22 @@ class _PharmaciesMapScreenState extends State<PharmaciesMapScreen> {
       13,
       child: Column(
         children: [
+          Tooltip(
+            message: appText(_isArabic).aiAssistant,
+            child: _MapButton(
+              heroTag: 'healthcare_assistant',
+              icon: Icons.auto_awesome_rounded,
+              foreground: Colors.white,
+              background: PharmaLensColors.teal,
+              onPressed: () => ChatbotView.showAsBottomSheet(context),
+            ),
+          ),
+
+          const SizedBox(
+            height:
+            9,
+          ),
+
           _MapButton(
             heroTag:
             'healthcare_recenter',
@@ -1260,26 +1139,11 @@ class _PharmaciesMapScreenState extends State<PharmaciesMapScreen> {
           selected,
         ),
         directionsLabel:
-        _text(
-          en:
-          'Directions',
-          ar:
-          'الطريق',
-        ),
+        appText(_isArabic).directions2,
         callLabel:
-        _text(
-          en:
-          'Call',
-          ar:
-          'اتصال',
-        ),
+        appText(_isArabic).call,
         sourceLabel:
-        _text(
-          en:
-          'Google listing',
-          ar:
-          'بيانات من Google',
-        ),
+        appText(_isArabic).googleListing,
         onDirections: () {
           _openDirections(
             selected,
@@ -1419,12 +1283,7 @@ class _PharmaciesMapScreenState extends State<PharmaciesMapScreen> {
 
             IconButton(
               tooltip:
-              _text(
-                en:
-                'Retry',
-                ar:
-                'إعادة المحاولة',
-              ),
+              appText(_isArabic).retry2,
               onPressed:
               _isLoading ||
                   _isRefreshing
@@ -1516,12 +1375,7 @@ class _PharmaciesMapScreenState extends State<PharmaciesMapScreen> {
                 ),
 
                 Text(
-                  _text(
-                    en:
-                    'Finding nearby healthcare...',
-                    ar:
-                    'جارٍ البحث عن خدمات الرعاية الصحية القريبة...',
-                  ),
+                  appText(_isArabic).findingNearbyHealthcare,
                   textAlign:
                   TextAlign.center,
                   style:
@@ -1579,9 +1433,10 @@ class _PharmaciesMapScreenState extends State<PharmaciesMapScreen> {
             userPosition.longitude,
           );
 
+    // No floating assistant button here: it covered the Call button of the
+    // place card. The assistant is the first of the map buttons instead.
     return Scaffold(
       backgroundColor: palette.background,
-      floatingActionButton: const FloatingChatbotButton(),
       body: Stack(
         children: [
           RepaintBoundary(
@@ -1692,15 +1547,6 @@ class _NearbyPlacesPanel
   final ValueChanged<NearbyHealthcarePlace>
   onSelected;
 
-  String _text({
-    required String en,
-    required String ar,
-  }) {
-    return isArabic
-        ? ar
-        : en;
-  }
-
   @override
   Widget build(
       BuildContext context,
@@ -1760,12 +1606,7 @@ class _NearbyPlacesPanel
 
               Expanded(
                 child: Text(
-                  _text(
-                    en:
-                    'Closest to you',
-                    ar:
-                    'الأقرب إليك',
-                  ),
+                  appText(isArabic).closestToYou,
                   style:
                   TextStyle(
                     color:
@@ -1823,12 +1664,7 @@ class _NearbyPlacesPanel
               ),
               child: Center(
                 child: Text(
-                  _text(
-                    en:
-                    'No nearby results yet.',
-                    ar:
-                    'لا توجد نتائج قريبة بعد.',
-                  ),
+                  appText(isArabic).noNearbyResultsYet,
                   textAlign:
                   TextAlign.center,
                   style:

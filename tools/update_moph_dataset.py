@@ -94,6 +94,30 @@ def summarize(csv_path):
     return len(rows), with_ingredients, list_date
 
 
+def price_problems(old_path, new_path):
+    """A column shift or a broken sheet shows up as many prices changing by a
+    large factor at once. Real repricings move a minority of products."""
+    def prices(path):
+        try:
+            with open(path, encoding="utf-8", newline="") as handle:
+                return {
+                    row["medicine_id"]: float(row["official_price_lbp"])
+                    for row in csv.DictReader(handle)
+                    if row.get("medicine_id") and (row.get("official_price_lbp") or "").replace(".", "", 1).isdigit()
+                }
+        except OSError:
+            return {}
+
+    old, new = prices(old_path), prices(new_path)
+    common = [code for code in new if code in old and old[code] > 0 and new[code] > 0]
+    if len(common) < 500:
+        return []
+    jumps = sum(1 for code in common if not (1 / 3 <= new[code] / old[code] <= 3))
+    if jumps / len(common) > 0.15:
+        return [f"{jumps} of {len(common)} prices changed more than threefold"]
+    return []
+
+
 def read_normalized(path):
     """File text with line endings unified, or None if it does not exist."""
     try:
@@ -167,6 +191,7 @@ def main():
             problems.append(f"{rows} medicines, down from {previous_rows}")
         if rows and with_ingredients / rows < 0.9:
             problems.append(f"only {with_ingredients}/{rows} medicines have ingredients")
+        problems += price_problems(CSV_PATH, new_csv)
         if problems:
             raise SystemExit("New list rejected: " + "; ".join(problems))
 

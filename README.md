@@ -1,6 +1,8 @@
 <div align="center">
 
-# 🩺 PharmaLens (فارما لينس)
+<img src="assets/branding/app_icon.png" width="112" alt="PharmaLens logo" />
+
+# PharmaLens (فارما لينس)
 
 ### Smart AI Prescription Reader & Healthcare Assistant for Lebanon
 
@@ -10,8 +12,8 @@
 [![Platform](https://img.shields.io/badge/Platform-Android%20%7C%20iOS%20%7C%20Windows%20%7C%20Web-blue?style=for-the-badge)](#platforms-supported)
 [![License](https://img.shields.io/badge/License-Proprietary-green?style=for-the-badge)](#license)
 
-**Developed with precision by the TechWrap Development Team**  
-📞 **Contact:** [+961 70 080 214](tel:+96170080214) | 💬 [WhatsApp Support](https://wa.me/96170080214)
+**Made in Lebanon 🇱🇧 by [TechWrap LB](https://www.instagram.com/techwrap.lb/)**
+📷 [@techwrap.lb](https://www.instagram.com/techwrap.lb/) | 💬 [WhatsApp](https://wa.me/96170080214)
 
 ---
 
@@ -36,24 +38,30 @@ Powered by **Google Gemini Multimodal Vision AI** and grounded in the official *
 - **6,000+ Registered Medicines**: Comprehensive database containing official Lebanese Ministry of Public Health pricing in LBP.
 - **Brand & Generic Verification**: Matches detected medications to official active pharmaceutical ingredients (APIs), strengths, and dosage forms.
 - **Cheaper Generic Alternatives**: Automatically finds identical composition alternatives, highlighting potential cost savings for patients.
-- **Continuous Data Synchronization**: Automatic background synchronization with official MOPH public releases, plus an instant on-demand **Manual Sync** button in Settings.
+- **Continuous Data Synchronization**: Automatic background synchronization with official MOPH public releases, checked on every launch, plus an on-demand **Sync** button that shows each step and its percentage ("Checking for new data… 42%").
 
-### 🤖 3. Medical AI Assistant with Domain Guardrail & Structured RAG
-- **Strict Medical Domain Guard**: Dedicated on-device filter ([`MedicalDomainGuardService`](lib/services/medical_domain_guard_service.dart)) that firmly rejects off-topic queries (such as programming, gaming, or general trivia) while keeping the conversation strictly medical and safe.
-- **Structured RAG (Retrieval-Augmented Generation)**: Answers questions regarding drug dosages, prices, and side effects grounded in the verified MOPH dataset rather than generic LLM hallucinations.
-- **Safety First**: Intercepts dangerous requests (e.g., self-dosage changes, emergency complaints) with urgent clinical warnings.
+### 🤖 3. AI Assistant that answers from the app's data
+- **Tool calling**: the assistant looks things up instead of guessing: MOPH search, product details, cheaper equivalents, safety checks, the user's allergies, reminders and prescriptions, doctors and nearby pharmacies ([`ChatbotTools`](lib/services/chatbot_tools.dart)).
+- **Editable instructions**: its rules live in [`assets/chatbot/knowledge_notes.md`](assets/chatbot/knowledge_notes.md).
+- **Prescription photos** go through the same reading and MOPH verification as a scan.
+- **Safety first**: an on-device guard keeps it on health topics and answers crisis messages with Lebanese help lines (Embrace 1564, Red Cross 140). Every answer is labeled as AI.
 
-### 👨‍⚕️ 4. Comprehensive Lebanese Doctors Directory
+### ⏰ 4. Reminders, alarms and family
+- **Notification or alarm**: alarm mode rings with the PharmaLens tone, says the medicine name aloud and opens a Taken / Snooze screen, even on the lock screen.
+- **Courses and refills**: the course length is taken from the prescription, reminders stop on the last day, and refill dates are estimated from the supply.
+- **Family profiles**: allergies, conditions (pregnancy, breastfeeding, child, kidney, liver), reminders and prescriptions per person, and a shareable medicine list for doctor visits.
+
+### 👨‍⚕️ 5. Comprehensive Lebanese Doctors Directory
 - **18,600+ Licensed Physicians**: Indexed database of verified doctors practicing across Lebanon.
 - **Instant Search & Filtration**: Fast search by doctor name (English & Arabic), specialty (Cardiology, Pediatrics, Oncology, etc.), and hospital affiliation.
 - **Smooth Pagination**: High-performance scrolling and memory-efficient offset pagination.
 
-### 🗺️ 5. Interactive Healthcare & Pharmacy Map
+### 🗺️ 6. Interactive Healthcare & Pharmacy Map
 - **Universal Multi-Platform Support**: Native interactive mapping that runs seamlessly across **Android, iOS, Windows, macOS, Linux, and Web**.
-- **Offline & Live Discovery**: Features offline registered Lebanese pharmacies alongside live Google Places nearby search with distance calculation, opening hours, and one-tap calling/directions.
+- **OpenStreetMap, no Maps key**: nearby pharmacies come from Google Places, with distance, opening hours and one-tap calling/directions.
 
-### 🌐 6. Fluent Bilingual Experience (English & Arabic)
-- Full **Right-to-Left (RTL)** layout support with tailored Arabic typography.
+### 🌐 7. Fluent Bilingual Experience (English & Arabic)
+- Full **Right-to-Left (RTL)** layout support with tailored Arabic typography, and medicine search in Arabic letters (بنادول finds Panadol).
 - Seamless one-tap language switching across the entire app interface.
 - Native Light and Dark themes with modern glassmorphism aesthetics.
 
@@ -71,7 +79,7 @@ PharmaLens Architecture
  ├── AI & Domain Services Layer
  │    ├── MedicalDomainGuardService (Deterministic On-Device Guardrail)
  │    ├── AiHandwritingService (Gemini Vision Multimodal REST Pipeline)
- │    ├── ChatbotService (Structured Tabular RAG + Medical Intelligence)
+ │    ├── ChatbotService + ChatbotTools (Gemini function calling over app data)
  │    ├── MedicineVerificationService & MedicineNormalizer (Fuzzy String & Token Scoring)
  │    └── NearbyHealthcareService (Google Places & Universal Map View)
  │
@@ -86,7 +94,7 @@ PharmaLens Architecture
 - **Framework**: [Flutter](https://flutter.dev) (Dart 3+)
 - **AI Models**: Google Gemini 3.x Flash / Flash-Lite (Multimodal Vision & NLP)
 - **Computer Vision**: Google ML Kit Digital Ink Recognition & Text OCR
-- **Mapping**: Slippy / Web Mercator Universal Map + OpenStreetMap / CartoDB tiles & Google Maps SDK
+- **Mapping**: Web Mercator universal map with OpenStreetMap tiles (no Google Maps SDK)
 - **Data Persistence**: SharedPreferences, In-Memory Indexed Caches, and CSV/JSON Engines
 - **Backend**: none. The app runs entirely on the device and calls Gemini, Google Places and openFDA directly.
 
@@ -96,8 +104,8 @@ PharmaLens Architecture
 
 | Platform | Status | Features Supported |
 | :--- | :---: | :--- |
-| **Android** | ✅ Full Support | Camera, ML Kit OCR, Native Google Maps, Full AI Suite |
-| **iOS** | ✅ Full Support | Camera, ML Kit OCR, Native Apple/Google Maps, Full AI Suite |
+| **Android** | ✅ Full Support | Camera, ML Kit OCR, map, alarms over the lock screen, Full AI Suite |
+| **iOS** | ✅ Full Support | Camera, ML Kit OCR, map, reminders, Full AI Suite |
 | **Web (Chrome, Edge, Safari)** | ✅ Full Support | Prescription Upload, Universal Slippy Map, Full AI Suite |
 | **Windows Desktop** | ✅ Full Support | Universal Map, Full Database Search, Full AI Suite |
 | **macOS & Linux** | ✅ Full Support | Desktop UI Layout, Universal Map, Full Database Search |
@@ -134,7 +142,7 @@ PharmaLens Architecture
      ];
 
      static const List<String> geminiModels = [
-       'gemini-2.5-flash',
+       'gemini-3.5-flash-lite',
        'gemini-flash-latest',
      ];
    }
@@ -177,6 +185,8 @@ flutter gen-l10n
 ## 🔒 Privacy & Safety Disclaimer
 
 > **Important Medical Notice:**  
+> To read a prescription, its photo is sent to Google's Gemini API; everything else (prescriptions, allergies, reminders) stays on the device.
+>
 > PharmaLens is an artificial intelligence assistance tool built to support prescription reading, price transparency, and medication education. It does **not** replace the clinical judgment of a licensed physician or pharmacist. Always consult a certified healthcare professional before starting, altering, or stopping any medication. In medical emergencies, contact national emergency services immediately.
 
 ---
@@ -185,13 +195,13 @@ flutter gen-l10n
 
 PharmaLens is proudly designed and developed by:
 
-**TechWrap Development Team**  
-- 📱 **Phone / Inquiries:** [+961 70 080 214](tel:+96170080214)  
-- 💬 **WhatsApp:** [Chat with us](https://wa.me/96170080214)  
-- 🌍 **Location:** Beirut, Lebanon  
+**TechWrap LB**: Lebanese developers building for patients in Lebanon 🇱🇧
+- 📷 **Instagram:** [@techwrap.lb](https://www.instagram.com/techwrap.lb/)
+- 💬 **WhatsApp:** [+961 70 080 214](https://wa.me/96170080214)
+- 🌍 **Location:** Beirut, Lebanon    
 
 ---
 
 ## 📄 License
 
-This project is proprietary software developed by the **TechWrap Development Team**. All rights reserved. For commercial licensing, partnerships, or institutional inquiries, please contact the development team directly.
+This project is proprietary software developed by **TechWrap LB**. All rights reserved. For commercial licensing, partnerships, or institutional inquiries, please contact the development team directly.

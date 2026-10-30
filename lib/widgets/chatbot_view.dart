@@ -4,9 +4,11 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../l10n/app_text.dart';
 import '../models/chat_message.dart';
 import '../services/chatbot_service.dart';
 import '../theme/pharmalens_theme.dart';
+import 'markdown_text.dart';
 
 class ChatbotView extends StatefulWidget {
   const ChatbotView({super.key, this.asSidePanel = false});
@@ -85,10 +87,6 @@ class _ChatbotViewState extends State<ChatbotView> {
     return Localizations.localeOf(context).languageCode.toLowerCase() == 'ar';
   }
 
-  String _text({required String en, required String ar}) {
-    return _isArabic ? ar : en;
-  }
-
   @override
   void initState() {
     super.initState();
@@ -101,18 +99,7 @@ class _ChatbotViewState extends State<ChatbotView> {
   }
 
   void _addWelcomeMessage() {
-    final greeting = _text(
-      en: 'Hello! I am PharmaLens AI Assistant 🤖\n\nI can help you with:\n'
-          '• 📷 **Prescription Vision**: Send a photo to see prices, usage instructions written by doctor, and cheaper alternatives.\n'
-          '• 💲 **Medicine Info & Prices**: Search official MOPH Lebanon prices.\n'
-          '• 📍 **Nearby Pharmacies**: Find active pharmacies in your area.\n'
-          '• 💊 **Generic Alternatives**: Discover exact composition lower-cost brands.',
-      ar: 'أهلاً بك! أنا مساعد PharmaLens الذكي 🤖\n\nيمكنني مساعدتك في:\n'
-          '• 📷 **تحليل الوصفة**: أرسل صورة لمعرفة الأسعار، تعليمات الطبيب، والبدائل المتاحة.\n'
-          '• 💲 **معلومات وأسعار الأدوية**: استعلام تسعيرة وزارة الصحة اللبنانية (MOPH).\n'
-          '• 📍 **صيدليات قريبة**: البحث عن الصيدليات المتاحة في منطقتك.\n'
-          '• 💊 **البدائل المتطابقة**: اكتشاف بدائل بنفس التركيبة وسعر أوفر.',
-    );
+    final greeting = appText(_isArabic).hiIAmThePharmalensAssistant;
 
     _chatbotService.addWelcomeMessage(greeting);
   }
@@ -157,10 +144,7 @@ class _ChatbotViewState extends State<ChatbotView> {
       });
     } catch (error) {
       _showSnackBar(
-        _text(
-          en: 'Could not attach image. Please try again.',
-          ar: 'تعذر إرفاق الصورة. يرجى إعادة المحاولة.',
-        ),
+        appText(_isArabic).couldNotAttachImagePleaseTry,
       );
     }
   }
@@ -196,10 +180,7 @@ class _ChatbotViewState extends State<ChatbotView> {
     _scrollToBottom();
 
     final promptText = text.isEmpty
-        ? _text(
-            en: 'Please analyze this prescription image for me.',
-            ar: 'يرجى قراءة هذه الوصفة وتحليل الأدوية والأسعار والبدائل فيها.',
-          )
+        ? appText(_isArabic).pleaseAnalyzeThisPrescriptionImageFor
         : text;
 
     await _chatbotService.sendMessage(
@@ -260,7 +241,8 @@ class _ChatbotViewState extends State<ChatbotView> {
           if (!widget.asSidePanel) _buildDragHandle(palette),
           _buildHeader(palette, isDark),
           const Divider(height: 1),
-          _buildQuickSuggestions(palette),
+          _buildAiNotice(palette),
+          if (!_chatbotService.conversationHistory.any((m) => m.isUser)) _buildQuickSuggestions(palette),
           Expanded(
             child: _buildMessagesList(palette, isDark),
           ),
@@ -321,7 +303,7 @@ class _ChatbotViewState extends State<ChatbotView> {
                   children: [
                     Flexible(
                       child: Text(
-                        _text(en: 'PharmaLens AI', ar: 'مساعد PharmaLens'),
+                        appText(_isArabic).pharmalensAi,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
@@ -339,7 +321,7 @@ class _ChatbotViewState extends State<ChatbotView> {
                         borderRadius: BorderRadius.circular(6),
                       ),
                       child: const Text(
-                        'MOPH API',
+                        'AI',
                         style: TextStyle(
                           color: PharmaLensColors.teal,
                           fontSize: 9.5,
@@ -363,10 +345,7 @@ class _ChatbotViewState extends State<ChatbotView> {
                     const SizedBox(width: 5),
                     Flexible(
                       child: Text(
-                        _text(
-                          en: 'Prescription Vision & Price Assistant',
-                          ar: 'مساعد تحليل الوصفات والأسعار',
-                        ),
+                        appText(_isArabic).answersFromTheMophListAnd,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
@@ -383,7 +362,7 @@ class _ChatbotViewState extends State<ChatbotView> {
           ),
           IconButton(
             icon: Icon(Icons.delete_outline_rounded, color: palette.textMuted),
-            tooltip: _text(en: 'Clear chat', ar: 'مسح المحادثة'),
+            tooltip: appText(_isArabic).clearChat,
             onPressed: _clearChatHistory,
           ),
           IconButton(
@@ -398,32 +377,24 @@ class _ChatbotViewState extends State<ChatbotView> {
   Widget _buildQuickSuggestions(PharmaLensPalette palette) {
     final suggestions = <Map<String, String>>[
       {
-        'label': _text(en: '📷 Analyze Prescription', ar: '📷 تحليل وصفة'),
-        'prompt': _text(
-          en: 'How do I upload a prescription image to find prices and alternatives?',
-          ar: 'كيف أرفع صورة وصفة طبية لمرفة الأسعار والبدائل؟',
-        ),
+        'label': appText(_isArabic).cheaperThanAugmentin1g,
+        'prompt': appText(_isArabic).whatIsTheOfficialPriceOf,
       },
       {
-        'label': _text(en: '💲 Panadol 500mg Price', ar: '💲 سعر بنادول 500 ملغ'),
-        'prompt': _text(
-          en: 'What is the official MOPH price of Panadol 500mg and what cheaper alternatives exist?',
-          ar: 'ما سعر بنادول 500ملغ الرسمي في لبنان وما هي البدائل الأوفر؟',
-        ),
+        'label': appText(_isArabic).checkMyLastPrescription,
+        'prompt': appText(_isArabic).checkTheMedicinesOfMyLast,
       },
       {
-        'label': _text(en: '📍 Nearby Pharmacies', ar: '📍 صيدليات قريبة'),
-        'prompt': _text(
-          en: 'Find nearby open pharmacies near me with contact details.',
-          ar: 'جد لي صيدليات قريبة مفتوحة مع أرقام التواصل.',
-        ),
+        'label': appText(_isArabic).panadolSideEffects,
+        'prompt': appText(_isArabic).whatAreTheCommonSideEffects,
       },
       {
-        'label': _text(en: '💊 Augmentin 1g Alternative', ar: '💊 بديل أوجمنتين 1غ'),
-        'prompt': _text(
-          en: 'What are the cheaper generic alternatives for Augmentin 1g?',
-          ar: 'ما هي بدائل أوجمنتين 1غ الأقل سعراً ونفس التركيبة؟',
-        ),
+        'label': appText(_isArabic).pharmaciesNearMe,
+        'prompt': appText(_isArabic).whichPharmaciesAreNearMeAnd,
+      },
+      {
+        'label': appText(_isArabic).findACardiologist,
+        'prompt': appText(_isArabic).findCardiologistsInBeirut,
       },
     ];
 
@@ -542,17 +513,27 @@ class _ChatbotViewState extends State<ChatbotView> {
                     ),
                     const SizedBox(height: 10),
                   ],
-                  SelectableText(
-                    msg.text,
-                    style: TextStyle(
-                      color: msg.isUser
-                          ? Colors.white
-                          : (msg.isError ? PharmaLensColors.danger : palette.textPrimary),
-                      fontSize: 14,
-                      height: 1.45,
-                      fontWeight: FontWeight.w600,
+                  if (msg.isUser)
+                    SelectableText(
+                      msg.text,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 14,
+                        height: 1.45,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    )
+                  else
+                    MarkdownText(
+                      msg.text,
+                      accentColor: PharmaLensColors.teal,
+                      style: TextStyle(
+                        color: msg.isError ? PharmaLensColors.danger : palette.textPrimary,
+                        fontSize: 14,
+                        height: 1.5,
+                        fontWeight: FontWeight.w500,
+                      ),
                     ),
-                  ),
                   if (msg.isBot && msg.sources.isNotEmpty) ...[
                     const SizedBox(height: 10),
                     Wrap(
@@ -566,7 +547,7 @@ class _ChatbotViewState extends State<ChatbotView> {
                             borderRadius: BorderRadius.circular(6),
                           ),
                           child: Text(
-                            '📍 $src',
+                            src,
                             style: const TextStyle(
                               color: PharmaLensColors.teal,
                               fontSize: 10,
@@ -575,6 +556,21 @@ class _ChatbotViewState extends State<ChatbotView> {
                           ),
                         );
                       }).toList(),
+                    ),
+                  ],
+                  if (msg.isBot && !msg.isWelcome && !msg.isError) ...[
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Icon(Icons.info_outline_rounded, size: 13, color: palette.textMuted),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: Text(
+                            appText(_isArabic).aiAnswerItCanBeWrong,
+                            style: TextStyle(color: palette.textMuted, fontSize: 10.5, fontWeight: FontWeight.w600),
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ],
@@ -597,6 +593,49 @@ class _ChatbotViewState extends State<ChatbotView> {
               ),
             ),
           ],
+        ],
+      ),
+    );
+  }
+
+  String _toolStatus(String? tool) {
+    switch (tool) {
+      case 'read_prescription':
+        return appText(_isArabic).readingThePrescription;
+      case 'search_medicines':
+      case 'get_medicine_details':
+        return appText(_isArabic).searchingTheMophList;
+      case 'find_alternatives':
+        return appText(_isArabic).comparingEquivalentProducts;
+      case 'check_safety':
+        return appText(_isArabic).checkingAllergiesAndDuplicates;
+      case 'get_my_health':
+        return appText(_isArabic).readingYourSavedData;
+      case 'get_patient_information':
+        return appText(_isArabic).lookingUpPatientInformation;
+      case 'find_doctors':
+        return appText(_isArabic).searchingDoctors;
+      case 'nearby_pharmacies':
+        return appText(_isArabic).findingNearbyPharmacies;
+    }
+    return appText(_isArabic).thinking;
+  }
+
+  Widget _buildAiNotice(PharmaLensPalette palette) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      color: PharmaLensColors.warning.withValues(alpha: 0.10),
+      child: Row(
+        children: [
+          const Icon(Icons.smart_toy_outlined, size: 16, color: PharmaLensColors.warning),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              appText(_isArabic).iAmAnAiAndCan,
+              style: TextStyle(color: palette.textPrimary, fontSize: 11.5, height: 1.35, fontWeight: FontWeight.w700),
+            ),
+          ),
         ],
       ),
     );
@@ -637,15 +676,17 @@ class _ChatbotViewState extends State<ChatbotView> {
                   child: CircularProgressIndicator(strokeWidth: 2),
                 ),
                 const SizedBox(width: 10),
-                Text(
-                  _text(
-                    en: 'PharmaLens AI is analyzing data...',
-                    ar: 'مساعد PharmaLens يحلل البيانات...',
-                  ),
-                  style: TextStyle(
-                    color: palette.textSecondary,
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.w700,
+                Flexible(
+                  child: ValueListenableBuilder<String?>(
+                    valueListenable: _chatbotService.activeTool,
+                    builder: (context, tool, _) => Text(
+                      _toolStatus(tool),
+                      style: TextStyle(
+                        color: palette.textSecondary,
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
                   ),
                 ),
               ],
@@ -674,10 +715,7 @@ class _ChatbotViewState extends State<ChatbotView> {
           const SizedBox(width: 10),
           Expanded(
             child: Text(
-              _text(
-                en: 'Prescription photo attached',
-                ar: 'صورة الوصفة مرفقة',
-              ),
+              appText(_isArabic).prescriptionPhotoAttached,
               style: TextStyle(
                 color: palette.textPrimary,
                 fontSize: 13,
@@ -707,12 +745,12 @@ class _ChatbotViewState extends State<ChatbotView> {
           children: [
             IconButton(
               icon: const Icon(Icons.camera_alt_rounded, color: PharmaLensColors.teal),
-              tooltip: _text(en: 'Take Photo', ar: 'التقاط صورة'),
+              tooltip: appText(_isArabic).takePhoto2,
               onPressed: () => _pickImage(ImageSource.camera),
             ),
             IconButton(
               icon: const Icon(Icons.photo_library_rounded, color: PharmaLensColors.teal),
-              tooltip: _text(en: 'Choose Photo', ar: 'اختيار صورة'),
+              tooltip: appText(_isArabic).choosePhoto,
               onPressed: () => _pickImage(ImageSource.gallery),
             ),
             Expanded(
@@ -723,10 +761,7 @@ class _ChatbotViewState extends State<ChatbotView> {
                 textInputAction: TextInputAction.send,
                 onSubmitted: (_) => _handleSend(),
                 decoration: InputDecoration(
-                  hintText: _text(
-                    en: 'Ask medicine, price, or prescription...',
-                    ar: 'اسأل عن دواء، سعر، أو وصفة...',
-                  ),
+                  hintText: appText(_isArabic).askMedicinePriceOrPrescription,
                   hintStyle: TextStyle(
                     color: palette.textMuted,
                     fontSize: 13.5,
@@ -787,6 +822,8 @@ class _ChatbotViewState extends State<ChatbotView> {
   }
 }
 
+/// A plain round button that opens the assistant. Small on purpose, so it
+/// covers as little of the page as possible.
 class FloatingChatbotButton extends StatelessWidget {
   const FloatingChatbotButton({super.key});
 
@@ -794,33 +831,15 @@ class FloatingChatbotButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final isArabic = Localizations.localeOf(context).languageCode.toLowerCase() == 'ar';
 
-    return Container(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(30),
-        boxShadow: [
-          BoxShadow(
-            color: PharmaLensColors.teal.withValues(alpha: 0.4),
-            blurRadius: 12,
-            offset: const Offset(0, 5),
-          ),
-        ],
-      ),
-      child: FloatingActionButton.extended(
-        heroTag: 'floating_chatbot_btn',
-        onPressed: () => ChatbotView.showAsBottomSheet(context),
-        backgroundColor: PharmaLensColors.teal,
-        elevation: 4,
-        icon: const Icon(Icons.smart_toy_rounded, color: Colors.white, size: 22),
-        label: Text(
-          isArabic ? 'المساعد الذكي' : 'AI Assistant',
-          style: const TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.w800,
-            fontSize: 13.5,
-            letterSpacing: -0.2,
-          ),
-        ),
-      ),
+    return FloatingActionButton(
+      heroTag: 'floating_chatbot_btn',
+      tooltip: appText(isArabic).aiAssistant,
+      onPressed: () => ChatbotView.showAsBottomSheet(context),
+      backgroundColor: PharmaLensColors.teal,
+      foregroundColor: Colors.white,
+      elevation: 3,
+      shape: const CircleBorder(),
+      child: const Icon(Icons.auto_awesome_rounded, size: 24),
     );
   }
 }

@@ -112,6 +112,37 @@ void main() {
       expect((await service.searchMedicines('BRAND2')).first.priceLbp, 100002);
     });
 
+    test('reports each stage with a growing percentage, then goes idle', () async {
+      final service = MophMedicineService();
+      final seen = <MophSyncProgress>[];
+      void record() => seen.add(service.progress.value);
+      service.progress.addListener(record);
+
+      final pending = http.runWithClient(
+        () => service.checkAndUpdateIfStale(force: true),
+        () => server(manifest(version: 'later', published: '2099-02-01', rows: 6), csvWith(6, date: '2099-02-01')),
+      );
+      // The Sync buttons are disabled from the moment a sync starts.
+      expect(service.isSyncing, isTrue);
+      final result = await pending;
+      service.progress.removeListener(record);
+
+      expect(result.status, MophSyncStatus.updated);
+      final stages = seen.map((p) => p.stage).toList();
+      expect(stages, containsAllInOrder(<MophSyncStage>[
+        MophSyncStage.checking,
+        MophSyncStage.downloading,
+        MophSyncStage.verifying,
+        MophSyncStage.applying,
+        MophSyncStage.idle,
+      ]));
+      final busy = seen.where((p) => p.busy).map((p) => p.percent).toList();
+      expect(busy, orderedEquals(List<int>.of(busy)..sort()), reason: 'progress never goes backwards');
+      expect(busy.last, greaterThanOrEqualTo(90));
+      expect(service.isSyncing, isFalse);
+      expect(service.progress.value.busy, isFalse);
+    });
+
     test('without a forced check, the server is asked at most once an hour', () async {
       final requests = <String>[];
 

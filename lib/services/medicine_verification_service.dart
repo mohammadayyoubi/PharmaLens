@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import '../models/ai_handwriting_result.dart';
 import '../models/medicine_price.dart';
 import '../models/verified_medicine_result.dart';
+import '../utils/medicine_equivalence.dart';
 import 'moph_medicine_service.dart';
 
 /// Safety-first prescription medicine verification.
@@ -759,11 +760,33 @@ class MedicineVerificationService {
       return _FieldMatchCheck.databaseValueMissing;
     }
 
-    return written == database
-        ? _FieldMatchCheck.match
-        : _FieldMatchCheck.mismatch;
+    if (written == database) {
+      return _FieldMatchCheck.match;
+    }
+
+    // A combination product is often written by its total or main strength
+    // ("Augmentin 1g" for 875mg/125mg); that is not a conflict.
+    final parts = database.split('/').where((part) => part.isNotEmpty).toList();
+    final writtenAmount = _milligrams(written);
+    if (parts.length > 1 && writtenAmount != null) {
+      final amounts = parts.map(_milligrams).whereType<double>().toList();
+      final total = amounts.fold<double>(0, (sum, value) => sum + value);
+      if (amounts.contains(writtenAmount) || (total - writtenAmount).abs() < 0.001) {
+        return _FieldMatchCheck.match;
+      }
+    }
+
+    return _FieldMatchCheck.mismatch;
   }
 
+  double? _milligrams(String strength) {
+    final match = RegExp(r'^(\d+(?:\.\d+)?)mg$').firstMatch(strength);
+    return match == null ? null : double.tryParse(match.group(1)!);
+  }
+
+  /// The strength written next to the medicine name. Dosing directions are
+  /// left out on purpose: "5 ml three times daily" is a dose, not the
+  /// product's strength.
   String _writtenStrength(AiMedicineSuggestion suggestion) {
     final explicit = _normalizeStrength(suggestion.strength);
 
@@ -773,11 +796,11 @@ class MedicineVerificationService {
 
     final match = RegExp(
       r'\b\d+(?:[.,]\d+)?\s*'
-      r'(?:mcg|µg|μg|ug|mg|g|kg|ml|l|iu|units?|%)'
+      r'(?:mcg|µg|μg|ug|mg|g|kg|iu|units?|%)'
       r'(?:\s*/\s*\d+(?:[.,]\d+)?\s*'
       r'(?:mcg|µg|μg|ug|mg|g|kg|ml|l|iu|units?|%))?',
       caseSensitive: false,
-    ).firstMatch(_combinedPrescriptionText(suggestion));
+    ).firstMatch(_productText(suggestion));
 
     return _normalizeStrength(match?.group(0) ?? '');
   }
@@ -792,15 +815,65 @@ class MedicineVerificationService {
       return _FieldMatchCheck.notProvided;
     }
 
-    final database = _normalizeDosageForm(medicine.dosageForm ?? '');
+    final databaseForm = medicine.dosageForm ?? '';
 
-    if (database.isEmpty) {
+    if (_normalizeDosageForm(databaseForm).isEmpty &&
+        MedicineEquivalence.formFamily(databaseForm).isEmpty) {
       return _FieldMatchCheck.databaseValueMissing;
     }
 
-    return written == database
+    return _formsCompatible(written, suggestion.form.trim().isEmpty ? written : suggestion.form, databaseForm)
         ? _FieldMatchCheck.match
         : _FieldMatchCheck.mismatch;
+  }
+
+  /// Compares a written form ("syrup", "drops", "tab") with a MOPH dosage
+  /// form by family, so "syrup" fits "Powder for oral suspension" and
+  /// "drops" fits "Eye drops solution", while "tablet" never fits a vaginal
+  /// tablet or an injection.
+  bool _formsCompatible(String written, String writtenRaw, String databaseForm) {
+    final database = MedicineEquivalence.formFamily(databaseForm);
+    final databaseBase = database.replaceAll('-mr', '');
+    final writtenFamily = MedicineEquivalence.formFamily(writtenRaw);
+    final writtenBase = writtenFamily.replaceAll('-mr', '');
+
+    // A modified-release order needs a modified-release product; a plain
+    // "tab" may be filled by a gastro-resistant or prolonged-release one.
+    if (writtenFamily.endsWith('-mr') && !database.endsWith('-mr')) {
+      return false;
+    }
+
+    if (writtenBase == databaseBase) return true;
+
+    // A route named in writing ("eye drops", "vaginal tablet") must match.
+    const routeFamilies = <String>{'eye', 'ear', 'nasal', 'inhalation', 'vaginal', 'rectal', 'injection'};
+    if (routeFamilies.contains(writtenBase)) return false;
+
+    const oral = <String>{'oral-liquid', 'powder-oral'};
+    if (oral.contains(writtenBase) && oral.contains(databaseBase)) return true;
+
+    // Generic words that do not name a route.
+    switch (written) {
+      case 'drops':
+        return const <String>{'eye', 'ear', 'nasal', 'oral-liquid'}.contains(databaseBase);
+      case 'solution':
+        return const <String>{'oral-liquid', 'eye', 'ear', 'nasal', 'injection'}.contains(databaseBase) ||
+            databaseForm.toLowerCase().contains('solution');
+      case 'spray':
+        return const <String>{'nasal', 'inhalation'}.contains(databaseBase) ||
+            databaseForm.toLowerCase().contains('spray');
+      case 'powder':
+        return databaseForm.toLowerCase().contains('powder') || databaseBase == 'powder-oral';
+      case 'inhaler':
+        return databaseBase == 'inhalation';
+      case 'ointment':
+      case 'cream':
+      case 'gel':
+        // "Eye ointment" or "vaginal gel" share the presentation word.
+        return databaseForm.toLowerCase().contains(written);
+    }
+
+    return false;
   }
 
   String _writtenDosageForm(AiMedicineSuggestion suggestion) {
@@ -861,10 +934,23 @@ class MedicineVerificationService {
       return _FieldMatchCheck.notProvided;
     }
 
-    final database = _normalizeRoute(medicine.route ?? '');
-
+    // The MOPH list has no route column; the dosage form implies one.
+    var database = _normalizeRoute(medicine.route ?? '');
     if (database.isEmpty) {
-      return _FieldMatchCheck.databaseValueMissing;
+      database = MedicineEquivalence.routeOfForm(medicine.dosageForm);
+    }
+
+    // Injections (IV, IM or SC) and sublingual use of a tablet cannot be
+    // told apart from the form, so they neither confirm nor conflict.
+    if (database.isEmpty ||
+        (database == 'oral' && written == 'sublingual') ||
+        (MedicineEquivalence.formFamily(medicine.dosageForm).startsWith('injection') &&
+            const <String>{'intravenous', 'intramuscular', 'subcutaneous'}.contains(written))) {
+      return _FieldMatchCheck.notProvided;
+    }
+
+    if (written == 'topical' && database == 'vaginal') {
+      return _FieldMatchCheck.notProvided;
     }
 
     return written == database
@@ -993,6 +1079,24 @@ class MedicineVerificationService {
     ].where((value) => value.trim().isNotEmpty).join(' ');
   }
 
+  /// Text that names the product, without the dosing directions.
+  String _productText(AiMedicineSuggestion suggestion) {
+    var line = suggestion.exactWrittenText;
+    final directions = suggestion.writtenInstructions.trim();
+    if (directions.isNotEmpty) {
+      line = line.replaceAll(directions, ' ');
+    }
+    return <String>[
+      suggestion.writtenFragment,
+      suggestion.name,
+      suggestion.genericName,
+      suggestion.strength,
+      // Without separate directions, only the start of the line, before any
+      // dose such as "1 x 3" or "5 ml", can hold the strength.
+      directions.isEmpty ? line.split(RegExp(r'\s(?:\d+\s*[x×*]|take|apply|po\b)', caseSensitive: false)).first : line,
+    ].where((value) => value.trim().isNotEmpty).join(' ');
+  }
+
   String _removeStrengthAndForm(String value) {
     return value
         .replaceAll(
@@ -1036,15 +1140,9 @@ class MedicineVerificationService {
         .trim();
   }
 
+  /// "1 g", "1000mg" and "1000000mcg" all become "1000mg".
   String _normalizeStrength(String value) {
-    return value
-        .toLowerCase()
-        .replaceAll(',', '.')
-        .replaceAll('μg', 'mcg')
-        .replaceAll('µg', 'mcg')
-        .replaceAll('ug', 'mcg')
-        .replaceAll(RegExp(r'\s+'), '')
-        .trim();
+    return MedicineEquivalence.strengthKey(value);
   }
 
   String _normalizeDosageForm(String value) {

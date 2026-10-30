@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
-import 'package:http/http.dart' as http;
 
 import '../models/ai_handwriting_result.dart';
 import 'gemini_client.dart';
@@ -66,13 +65,7 @@ class AiHandwritingService {
       imageMimeType: imageMimeType,
     );
 
-    final apiKeys =
-        GeminiClient.apiKeys;
-
-    final models =
-        GeminiClient.models;
-
-    if (apiKeys.isEmpty) {
+    if (GeminiClient.apiKeys.isEmpty) {
       throw const AiHandwritingException(
         code:
         AiHandwritingErrorCode.authenticationUnavailable,
@@ -82,7 +75,7 @@ class AiHandwritingService {
       );
     }
 
-    if (models.isEmpty) {
+    if (GeminiClient.models.isEmpty) {
       throw const AiHandwritingException(
         code:
         AiHandwritingErrorCode.serviceUnavailable,
@@ -92,187 +85,61 @@ class AiHandwritingService {
       );
     }
 
-    final deadline =
-    DateTime.now().add(
-      _totalBudget,
-    );
+    final stopwatch =
+    Stopwatch()..start();
 
-    Object? lastError;
+    final image =
+    <String, dynamic>{
+      'inline_data':
+      <String, dynamic>{
+        'mime_type':
+        imageMimeType
+            .trim()
+            .toLowerCase(),
+        'data':
+        base64Encode(
+          imageBytes,
+        ),
+      },
+    };
 
-    modelLoop:
-    for (final model in models) {
-      for (
-      var keyIndex = 0;
-      keyIndex < apiKeys.length;
-      keyIndex++
-      ) {
-        if (deadline.difference(DateTime.now()) <
-            const Duration(seconds: 5)) {
-          lastError ??= TimeoutException(
-            'Prescription reading timed out.',
-          );
-          break modelLoop;
-        }
+    // GeminiClient walks the model and key fallbacks within the remaining
+    // budget, and moves to the next model when one returns invalid JSON.
+    Future<AiHandwritingResult> read(
+        String prompt,
+        int maxOutputTokens,
+        ) async {
+      final json =
+      await const GeminiClient()
+          .generateJson(
+        parts:
+        <Map<String, dynamic>>[
+          image,
+          <String, dynamic>{
+            'text':
+            prompt,
+          },
+        ],
+        responseSchema:
+        _transcriptionResponseSchema(),
+        maxOutputTokens:
+        maxOutputTokens,
+        requestTimeout:
+        _requestTimeout,
+        totalBudget:
+        _totalBudget -
+            stopwatch.elapsed,
+      );
 
-        try {
-          return await _sendWithRecovery(
-            deadline:
-            deadline,
-            apiKey:
-            apiKeys[keyIndex],
-            keyIndex:
-            keyIndex + 1,
-            model:
-            model,
-            imageBytes:
-            imageBytes,
-            imageMimeType:
-            imageMimeType,
-            ocrText:
-            ocrText,
-            doctorContext:
-            doctorContext,
-            medicineCatalog:
-            medicineCatalog,
-            responseLanguage:
-            responseLanguage,
-          );
-        } on TimeoutException catch (
-    error,
-    stackTrace
-    ) {
-    lastError =
-    error;
-
-    _debugLog(
-    'Gemini request timed out.',
-    error,
-    stackTrace,
-    );
-
-    // A timeout is not specific to a key; try the next model.
-    continue modelLoop;
-    } catch (
-    error,
-    stackTrace
-    ) {
-    lastError =
-    error;
-
-    _debugLog(
-    'Gemini request failed.',
-    error,
-    stackTrace,
-    );
-
-    if (!_shouldTryNext(
-    error.toString(),
-    )) {
-    break;
+      return AiHandwritingResult
+          .fromJson(
+        json,
+      );
     }
-    }
-    }
-    }
-
-    final errorText =
-    lastError
-        ?.toString()
-        .toLowerCase() ??
-    '';
-
-    if (errorText.contains(
-    'status 429',
-    ) ||
-    errorText.contains(
-    'quota',
-    ) ||
-    errorText.contains(
-    'rate limit',
-    )) {
-    throw const AiHandwritingException(
-    code:
-    AiHandwritingErrorCode.rateLimited,
-    message:
-    'Too many prescription analysis requests. Please try again later.',
-    );
-    }
-
-    if (errorText.contains(
-    'timeout',
-    ) ||
-    errorText.contains(
-    'timed out',
-    ) ||
-    errorText.contains(
-    'status 408',
-    ) ||
-    errorText.contains(
-    'status 504',
-    )) {
-    throw const AiHandwritingException(
-    code:
-    AiHandwritingErrorCode.timeout,
-    message:
-    'Prescription reading took too long. Check your internet connection and try again.',
-    );
-    }
-
-    if (errorText.contains(
-    'status 401',
-    ) ||
-    errorText.contains(
-    'status 403',
-    ) ||
-    errorText.contains(
-    'api key',
-    )) {
-    throw const AiHandwritingException(
-    code:
-    AiHandwritingErrorCode.authenticationUnavailable,
-    message:
-    'Prescription analysis could not connect to the AI service.',
-    );
-    }
-
-    throw const AiHandwritingException(
-    code:
-    AiHandwritingErrorCode.serviceUnavailable,
-    message:
-    'Prescription analysis is temporarily unavailable. Please try again.',
-    );
-  }
-
-  Future<AiHandwritingResult>
-  _sendWithRecovery({
-    required DateTime deadline,
-    required String apiKey,
-    required int keyIndex,
-    required String model,
-    required Uint8List imageBytes,
-    required String imageMimeType,
-    required String ocrText,
-    required String doctorContext,
-    required String medicineCatalog,
-    required String responseLanguage,
-  }) async {
-    Object? primaryError;
 
     try {
-      final primaryResult =
-      await _makeGeminiRequest(
-        deadline:
-        deadline,
-        apiKey:
-        apiKey,
-        keyIndex:
-        keyIndex,
-        model:
-        model,
-        imageBytes:
-        imageBytes,
-        imageMimeType:
-        imageMimeType,
-        prompt:
+      final primary =
+      await read(
         _buildPrimaryPrompt(
           ocrText:
           ocrText,
@@ -283,72 +150,54 @@ class AiHandwritingService {
           responseLanguage:
           responseLanguage,
         ),
-        schema:
-        _transcriptionResponseSchema(),
-        maxOutputTokens:
         8192,
       );
 
-      if (primaryResult
+      if (primary
           .hasSuggestions) {
-        return primaryResult;
+        return primary;
       }
-    } catch (error) {
-      primaryError =
-          error;
 
-      if (!_canUseRecovery(
-        error.toString(),
-      )) {
-        rethrow;
-      }
-    }
+      // The full prompt found no medicine lines; a shorter, stricter one
+      // sometimes does when there is time left for it.
+      var lastResult =
+          primary;
 
-    try {
-      final recoveryResult =
-      await _makeGeminiRequest(
-        deadline:
-        deadline,
-        apiKey:
-        apiKey,
-        keyIndex:
-        keyIndex,
-        model:
-        model,
-        imageBytes:
-        imageBytes,
-        imageMimeType:
-        imageMimeType,
-        prompt:
-        _buildRecoveryPrompt(
-          ocrText:
-          ocrText,
-          responseLanguage:
-          responseLanguage,
-        ),
-        schema:
-        _transcriptionResponseSchema(),
-        maxOutputTokens:
-        6144,
-      );
+      if (_totalBudget -
+          stopwatch.elapsed >
+          const Duration(seconds: 15)) {
+        final recovery =
+        await read(
+          _buildRecoveryPrompt(
+            ocrText:
+            ocrText,
+            responseLanguage:
+            responseLanguage,
+          ),
+          6144,
+        );
 
-      if (recoveryResult
-          .hasSuggestions) {
-        return recoveryResult;
+        if (recovery
+            .hasSuggestions) {
+          return recovery;
+        }
+
+        lastResult =
+            recovery;
       }
 
       return AiHandwritingResult(
         detectedDoctorName:
-        recoveryResult
+        lastResult
             .detectedDoctorName,
         detectedSpecialty:
-        recoveryResult
+        lastResult
             .detectedSpecialty,
         detectedPatientProblem:
-        recoveryResult
+        lastResult
             .detectedPatientProblem,
         rawInterpretation:
-        recoveryResult
+        lastResult
             .rawInterpretation,
         suggestions:
         const [],
@@ -362,158 +211,60 @@ class AiHandwritingService {
               : 'No usable medication lines were extracted. Crop closer to the medicine area and try again.',
         ],
       );
-    } catch (recoveryError) {
-      throw Exception(
-        'Primary reading failed: '
-            '${primaryError ?? "empty result"}. '
-            'Recovery reading failed: '
-            '$recoveryError',
+    } on GeminiException catch (
+    error,
+    stackTrace
+    ) {
+      _debugLog(
+        'Prescription reading failed.',
+        error,
+        stackTrace,
+      );
+
+      throw _readingException(
+        error,
       );
     }
   }
 
-  Future<AiHandwritingResult>
-  _makeGeminiRequest({
-    required DateTime deadline,
-    required String apiKey,
-    required int keyIndex,
-    required String model,
-    required Uint8List imageBytes,
-    required String imageMimeType,
-    required String prompt,
-    required Map<String, dynamic> schema,
-    required int maxOutputTokens,
-  }) async {
-    final cleanModel =
-    model
-        .trim()
-        .replaceFirst(
-      'models/',
-      '',
-    );
+  AiHandwritingException _readingException(
+      GeminiException error,
+      ) {
+    switch (error.kind) {
+      case GeminiErrorKind.rateLimited:
+        return const AiHandwritingException(
+          code:
+          AiHandwritingErrorCode.rateLimited,
+          message:
+          'Too many prescription analysis requests. Please try again later.',
+        );
 
-    final remaining =
-    deadline.difference(
-      DateTime.now(),
-    );
+      case GeminiErrorKind.timeout:
+        return const AiHandwritingException(
+          code:
+          AiHandwritingErrorCode.timeout,
+          message:
+          'Prescription reading took too long. Check your internet connection and try again.',
+        );
 
-    if (remaining <
-        const Duration(seconds: 3)) {
-      throw TimeoutException(
-        'Prescription reading timed out.',
-      );
+      case GeminiErrorKind.notConfigured:
+      case GeminiErrorKind.unauthorized:
+        return const AiHandwritingException(
+          code:
+          AiHandwritingErrorCode.authenticationUnavailable,
+          message:
+          'Prescription analysis could not connect to the AI service.',
+        );
+
+      case GeminiErrorKind.badResponse:
+      case GeminiErrorKind.unavailable:
+        return const AiHandwritingException(
+          code:
+          AiHandwritingErrorCode.serviceUnavailable,
+          message:
+          'Prescription analysis is temporarily unavailable. Please try again.',
+        );
     }
-
-    final timeout =
-    remaining < _requestTimeout
-        ? remaining
-        : _requestTimeout;
-
-    final uri =
-    Uri.parse(
-      'https://generativelanguage.googleapis.com/'
-          'v1beta/models/$cleanModel:generateContent',
-    );
-
-    final response =
-    await http
-        .post(
-      uri,
-      headers:
-      <String, String>{
-        'Content-Type':
-        'application/json',
-        'x-goog-api-key':
-        apiKey,
-      },
-      body:
-      jsonEncode(
-        <String, dynamic>{
-          'contents':
-          <Map<String, dynamic>>[
-            <String, dynamic>{
-              'role':
-              'user',
-              'parts':
-              <Map<String, dynamic>>[
-                <String, dynamic>{
-                  'inline_data':
-                  <String, dynamic>{
-                    'mime_type':
-                    imageMimeType
-                        .trim()
-                        .toLowerCase(),
-                    'data':
-                    base64Encode(
-                      imageBytes,
-                    ),
-                  },
-                },
-                <String, dynamic>{
-                  'text':
-                  prompt,
-                },
-              ],
-            },
-          ],
-          'generationConfig':
-          GeminiClient.generationConfig(
-            model:
-            cleanModel,
-            maxOutputTokens:
-            maxOutputTokens,
-            responseSchema:
-            schema,
-          ),
-        },
-      ),
-    )
-        .timeout(
-      timeout,
-    );
-
-    if (response.statusCode <
-        200 ||
-        response.statusCode >=
-            300) {
-      throw Exception(
-        'Gemini key $keyIndex '
-            'with model $cleanModel failed. '
-            'Status ${response.statusCode}: '
-            '${response.body}',
-      );
-    }
-
-    final decodedValue =
-    jsonDecode(
-      response.body,
-    );
-
-    if (decodedValue is! Map) {
-      throw Exception(
-        'Gemini returned an unexpected response format.',
-      );
-    }
-
-    final decoded =
-    Map<String, dynamic>.from(
-      decodedValue,
-    );
-
-    final outputText =
-    GeminiClient.extractText(
-      decoded,
-    );
-
-    final jsonMap =
-    _extractJson(
-      outputText,
-    );
-
-    return AiHandwritingResult
-        .fromJson(
-      jsonMap,
-    );
   }
 
   String _buildPrimaryPrompt({
@@ -619,6 +370,28 @@ Example:
 must NOT automatically become:
 "Funzol 150 mg"
 
+DIRECTIONS (how to take each medicine):
+
+Doctors often write the directions on the line(s) under the medicine name,
+or beside it, and very often in Arabic, e.g.
+"حبة صباحاً ومساءً", "ملعقة ٣ مرات يومياً بعد الأكل", "مرتين باليوم لمدة ٧ أيام",
+"عند اللزوم", or with Arabic-Indic digits (١ ٢ ٣). Latin forms are common too:
+"1x3", "1-0-1", "bid", "tid", "q8h", "prn", "x 7 days".
+
+- Copying written directions is transcription, not invention: whenever any
+  directions are visible for a medicine, fill writtenInstructions with them,
+  exactly as written and in their original language. Do not translate them.
+- Also fill dose, frequency and duration with the parts of those written
+  directions that state them; leave a field empty only when that part is not
+  written.
+- Attach each directions line to the medicine it belongs to (normally the
+  medicine directly above it).
+- A directions line is never a separate medication order.
+- When one directions line clearly applies to several medicines (a bracket,
+  "للاثنين", "for both", "same"), copy it to each of them.
+- Leave writtenInstructions empty only when no directions are written for
+  that medicine at all.
+
 ROUTE RULES:
 
 - Tablet, capsule, syrup, suspension, PO, or oral supports ORAL.
@@ -690,7 +463,10 @@ Rules:
 - Do not invent strengths.
 - Do not invent dosage forms.
 - Do not invent routes.
-- Do not invent directions.
+- Do not invent directions, but copy every written direction (often Arabic,
+  often on the line under the medicine name) into writtenInstructions as
+  written, and into dose / frequency / duration. A directions line belongs
+  to the medicine above it and is never a separate medication order.
 
 Form rules:
 
@@ -804,21 +580,29 @@ $ocrText
               <String, dynamic>{
                 'type':
                 'STRING',
+                'description':
+                'Amount per intake as written (e.g. "1 tablet", "حبة", "5 ml"); empty if not written.',
               },
               'frequency':
               <String, dynamic>{
                 'type':
                 'STRING',
+                'description':
+                'How often, as written (e.g. "3 times a day", "صباحاً ومساءً", "q8h"); empty if not written.',
               },
               'duration':
               <String, dynamic>{
                 'type':
                 'STRING',
+                'description':
+                'For how long, as written (e.g. "7 days", "لمدة أسبوع"); empty if not written.',
               },
               'writtenInstructions':
               <String, dynamic>{
                 'type':
                 'STRING',
+                'description':
+                'All directions written for this medicine, copied exactly in their original language (often Arabic, often on the line under the name). Empty only when none are written.',
               },
               'route':
               <String, dynamic>{
@@ -1006,161 +790,6 @@ $ocrText
         message:
         'This prescription image format is not supported.',
         retryable: false,
-      );
-    }
-  }
-
-  bool _canUseRecovery(
-      String errorText,
-      ) {
-    final lower =
-    errorText
-        .toLowerCase();
-
-    return lower.contains(
-      'schema',
-    ) ||
-        lower.contains(
-          'status 400',
-        ) ||
-        lower.contains(
-          'invalid argument',
-        ) ||
-        lower.contains(
-          'no text output',
-        ) ||
-        lower.contains(
-          'valid json',
-        ) ||
-        lower.contains(
-          'unexpected response',
-        );
-  }
-
-  bool _shouldTryNext(
-      String errorText,
-      ) {
-    final lower =
-    errorText
-        .toLowerCase();
-
-    return lower.contains(
-      'status 400',
-    ) ||
-        lower.contains(
-          'status 401',
-        ) ||
-        lower.contains(
-          'status 403',
-        ) ||
-        lower.contains(
-          'status 404',
-        ) ||
-        lower.contains(
-          'status 408',
-        ) ||
-        lower.contains(
-          'status 409',
-        ) ||
-        lower.contains(
-          'status 429',
-        ) ||
-        lower.contains(
-          'status 500',
-        ) ||
-        lower.contains(
-          'status 502',
-        ) ||
-        lower.contains(
-          'status 503',
-        ) ||
-        lower.contains(
-          'status 504',
-        ) ||
-        lower.contains(
-          'not_found',
-        ) ||
-        lower.contains(
-          'model',
-        ) ||
-        lower.contains(
-          'api key',
-        ) ||
-        lower.contains(
-          'quota',
-        ) ||
-        lower.contains(
-          'rate limit',
-        ) ||
-        lower.contains(
-          'timeout',
-        ) ||
-        lower.contains(
-          'timed out',
-        );
-  }
-
-  Map<String, dynamic> _extractJson(
-      String text,
-      ) {
-    final cleaned =
-    text
-        .replaceAll(
-      '```json',
-      '',
-    )
-        .replaceAll(
-      '```JSON',
-      '',
-    )
-        .replaceAll(
-      '```',
-      '',
-    )
-        .trim();
-
-    try {
-      final decoded =
-      jsonDecode(
-        cleaned,
-      );
-
-      if (decoded is! Map) {
-        throw const FormatException(
-          'Decoded response is not an object.',
-        );
-      }
-
-      return Map<String, dynamic>.from(
-        decoded,
-      );
-    } catch (_) {
-      final match =
-      RegExp(
-        r'\{[\s\S]*\}',
-      ).firstMatch(
-        cleaned,
-      );
-
-      if (match == null) {
-        throw Exception(
-          'Gemini did not return valid JSON.',
-        );
-      }
-
-      final decoded =
-      jsonDecode(
-        match.group(0)!,
-      );
-
-      if (decoded is! Map) {
-        throw Exception(
-          'Gemini JSON result is not an object.',
-        );
-      }
-
-      return Map<String, dynamic>.from(
-        decoded,
       );
     }
   }

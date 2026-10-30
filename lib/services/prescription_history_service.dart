@@ -16,7 +16,9 @@ class PrescriptionHistoryService extends ChangeNotifier {
   factory PrescriptionHistoryService() => _instance;
 
   static const String _storageKey = 'pharmalens_prescription_history_v1';
-  static const int maxRecords = 50;
+  /// Older scans are dropped past this. My Health shows them a page at a
+  /// time, so a long history stays quick.
+  static const int maxRecords = 200;
 
   List<PrescriptionRecord> _records = <PrescriptionRecord>[];
   bool _loaded = false;
@@ -55,6 +57,7 @@ class PrescriptionHistoryService extends ChangeNotifier {
     String doctorName = '',
     String specialty = '',
     Uint8List? imageBytes,
+    String profileId = 'me',
   }) async {
     await load();
 
@@ -68,6 +71,7 @@ class PrescriptionHistoryService extends ChangeNotifier {
       specialty: specialty,
       imagePath: imagePath,
       medicines: medicines,
+      profileId: profileId,
     );
 
     _records = <PrescriptionRecord>[record, ..._records];
@@ -97,6 +101,7 @@ class PrescriptionHistoryService extends ChangeNotifier {
       specialty: old.specialty,
       imagePath: old.imagePath,
       medicines: medicines,
+      profileId: old.profileId,
     );
     await _persist();
     notifyListeners();

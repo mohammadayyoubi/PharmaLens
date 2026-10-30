@@ -2,7 +2,7 @@ name: pharmalens
 description: "Smart prescription reading and medicine safety assistant."
 publish_to: "none"
 
-version: 1.0.0+1
+version: 1.1.0+2
 
 environment:
   sdk: '>=3.0.0 <4.0.0'
@@ -34,6 +34,10 @@ dependencies:
   flutter_timezone: ^5.1.1
   connectivity_plus: ^7.3.2
   flutter_tts: ^4.2.5
+  audioplayers: ^6.8.1
+  permission_handler: ^13.0.2
+  crypto: ^3.0.8
+  share_plus: ^13.3.1
 
 dev_dependencies:
   flutter_lints: ^6.0.0
@@ -46,8 +50,10 @@ flutter:
   generate: true
 
   assets:
-    - assets/medicines/medicines.csv
-    - assets/medicines/medicine_details.json
     - assets/medicines/lebanon_medicine_prices.csv
     - assets/medicines/lebanon_medicine_prices.json
     - assets/doctors/lebanon_doctors.csv
+    - assets/chatbot/knowledge_notes.md
+    - assets/sounds/pharmalens_alarm.wav
+    - assets/branding/
+    - assets/images/

@@ -7,9 +7,13 @@ class PrescriptionRecord {
     this.doctorName = '',
     this.specialty = '',
     this.imagePath = '',
+    this.profileId = 'me',
   });
 
   final String id;
+
+  /// Whose prescription this is (HealthProfile.id; "me" for the owner).
+  final String profileId;
   final DateTime createdAt;
   final String doctorName;
   final String specialty;
@@ -27,6 +31,7 @@ class PrescriptionRecord {
       'doctor_name': doctorName,
       'specialty': specialty,
       'image_path': imagePath,
+      'profile_id': profileId,
       'medicines': medicines.map((m) => m.toJson()).toList(),
     };
   }
@@ -40,6 +45,7 @@ class PrescriptionRecord {
       doctorName: '${json['doctor_name'] ?? ''}',
       specialty: '${json['specialty'] ?? ''}',
       imagePath: '${json['image_path'] ?? ''}',
+      profileId: '${json['profile_id'] ?? 'me'}',
       medicines: rawMedicines is List
           ? rawMedicines
               .whereType<Map>()

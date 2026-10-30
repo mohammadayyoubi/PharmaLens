@@ -4,6 +4,9 @@ class PharmaLensColors {
   const PharmaLensColors._();
 
   static const Color deepNavy = Color(0xFF0B2C3F);
+
+  /// Native splash and startup screen background (android/.../colors.xml).
+  static const Color splashBackground = Color(0xFF062B3A);
   static const Color navy = Color(0xFF123A4D);
   static const Color navyLight = Color(0xFF1F5D6F);
 
@@ -44,6 +47,27 @@ class PharmaLensColors {
   static const Color warning = Color(0xFFE59B31);
   static const Color danger = Color(0xFFD64545);
   static const Color info = Color(0xFF4F79C9);
+
+  /// Deep navy to teal, behind the onboarding and alarm screens.
+  static const List<Color> brandGradient = <Color>[splashBackground, Color(0xFF0B4F63), Color(0xFF0E7C86)];
+
+  // Accents that tell features apart (home tiles, female doctors, directions).
+  static const Color accentBlue = Color(0xFF3B82C4);
+  static const Color accentCoral = Color(0xFFE06A5A);
+  static const Color accentViolet = Color(0xFF8B5CF6);
+  static const Color accentPurple = Color(0xFF7457E8);
+  static const Color accentPink = Color(0xFFD95A91);
+
+  // Map placeholders and the selected pin.
+  static const Color mapTileLight = Color(0xFFE8F1F5);
+  static const Color mapTileDark = Color(0xFF0F1E28);
+  static const Color mapBackgroundDark = Color(0xFF071D28);
+  static const Color mapPinSelected = Color(0xFFFF6F59);
+
+  // Other brands' colors, used only for their marks in About.
+  static const Color instagram = Color(0xFFE1306C);
+  static const Color lebanonRed = Color(0xFFED1C24);
+  static const Color lebanonCedar = Color(0xFF00A651);
 }
 
 class PharmaLensPalette {

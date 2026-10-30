@@ -18,7 +18,17 @@ class MedicalDomainGuardService {
     required String responseLanguage,
     bool hasAttachedImage = false,
     bool catalogMatchFound = false,
+    bool hasConversationContext = false,
   }) {
+    // Someone in crisis gets help lines first, whatever else they wrote.
+    if (_containsAny(_normalize(input), _crisisTerms)) {
+      return MedicalDomainGuardDecision(
+        allowed: false,
+        reason: 'crisis',
+        userMessage: _crisisMessage(responseLanguage),
+      );
+    }
+
     if (hasAttachedImage) {
       return const MedicalDomainGuardDecision(
         allowed: true,
@@ -60,6 +70,16 @@ class MedicalDomainGuardService {
       return const MedicalDomainGuardDecision(
         allowed: true,
         reason: 'medical_or_pharmacy_scope',
+        userMessage: '',
+      );
+    }
+
+    // A short follow-up ("and for kids?", "the second one?") continues a
+    // conversation that was already about health.
+    if (hasConversationContext && !_containsAny(normalized, _blockedTopics)) {
+      return const MedicalDomainGuardDecision(
+        allowed: true,
+        reason: 'follow_up',
         userMessage: '',
       );
     }
@@ -481,19 +501,15 @@ class MedicalDomainGuardService {
     // Programming & computer science
     'python',
     'javascript',
-    'js',
     'typescript',
-    'ts',
     'java',
     'c++',
     'cpp',
     'c#',
     'csharp',
     'golang',
-    'rust',
     'php',
     'ruby',
-    'swift',
     'kotlin',
     'html',
     'css',
@@ -507,11 +523,8 @@ class MedicalDomainGuardService {
     'software',
     'flutter',
     'dart',
-    'react',
     'angular',
     'vue',
-    'node',
-    'express',
     'django',
     'fastapi',
     'flask',
@@ -653,7 +666,6 @@ class MedicalDomainGuardService {
     'تداول',
     'حب',
     'علاقة',
-    'غرام',
     'وظيفة',
     'سيرة ذاتية',
   ];
@@ -669,9 +681,6 @@ class MedicalDomainGuardService {
     'which medicine should i take',
     'what drug should i take',
     'what should i take for chest pain',
-    'overdose',
-    'suicide',
-    'kill myself',
     'زود الجرعة',
     'زيد الجرعة',
     'خفف الجرعة',
@@ -686,8 +695,6 @@ class MedicalDomainGuardService {
     'شو اخذ',
     'ماذا اخذ',
     'اي دواء اخد',
-    'جرعة قاتلة',
-    'انتحار',
   ];
 
   static bool _containsAny(String text, List<String> values) {
@@ -740,6 +747,36 @@ class MedicalDomainGuardService {
     return responseLanguage.toLowerCase() == 'arabic'
         ? 'أنا PharmaLens، مساعد ذكي مخصص حصريًا للرعاية الصحية، الأدوية، والوصفات الطبية. يمكنني مساعدتك بمعلومات الأدوية، الجرعات والتحذيرات، الأسعار الرسمية والبدائل، وإرشادات الوصفات. لا يمكنني الإجابة على أسئلة خارج المجال الطبي أو الصيدلي (مثل البرمجة أو المواضيع العامة).'
         : 'I am PharmaLens, an AI assistant dedicated exclusively to healthcare, pharmaceuticals, and prescriptions. I can help with medicine information, usage instructions, side effects, official prices, generic alternatives, and prescription verification. I cannot answer questions outside the medical or pharmacy scope (such as programming, coding, or general trivia).';
+  }
+
+  static const List<String> _crisisTerms = [
+    'suicide',
+    'suicidal',
+    'kill myself',
+    'end my life',
+    'want to die',
+    'self harm',
+    'hurt myself',
+    'انتحار',
+    'انتحر',
+    'اقتل نفسي',
+    'بدي موت',
+    'اريد ان اموت',
+    'أريد أن أموت',
+    'اذي نفسي',
+    'أؤذي نفسي',
+  ];
+
+  static String _crisisMessage(String responseLanguage) {
+    return responseLanguage.toLowerCase() == 'arabic'
+        ? 'يؤسفني أنك تمرّ بهذا، ولست وحدك. تكلّم الآن مع شخص يستطيع المساعدة:\n\n'
+            '- **خط الحياة Embrace‏ 1564**: مجاني وسري، في لبنان.\n'
+            '- **الصليب الأحمر 140** أو أقرب طوارئ إذا كنت في خطر الآن.\n\n'
+            'إذا كنت تفكر في تناول كمية كبيرة من الأدوية، ابتعد عنها واطلب من شخص قريب أن يبقى معك.'
+        : "I'm really sorry you're going through this, and you are not alone. Please talk to someone who can help right now:\n\n"
+            '- **Embrace Lifeline 1564**: free and confidential, in Lebanon.\n'
+            '- **Lebanese Red Cross 140**, or the nearest emergency room, if you are in danger now.\n\n'
+            'If you are thinking of taking a lot of medicine, please put it away from you and ask someone you trust to stay with you.';
   }
 
   static String _unsafeMedicalRefusal(String responseLanguage) {

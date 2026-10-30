@@ -1,12 +1,17 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import '../l10n/app_text.dart';
 import '../models/medicine_price.dart';
 import '../screens/medicine_details_screen.dart';
 import '../services/moph_medicine_service.dart';
 
 import '../theme/pharmalens_theme.dart';
+import '../utils/formatters.dart';
 import '../widgets/chatbot_view.dart';
+import '../widgets/sync_progress.dart';
 
 class MedicineSearchScreen extends StatefulWidget {
   const MedicineSearchScreen({
@@ -52,6 +57,13 @@ class _MedicineSearchScreenState
   String _lastQuery = '';
   String? _errorMessage;
 
+  /// All matches of the current search (or the whole list when browsing),
+  /// while [_results] holds only the pages loaded so far.
+  int? _totalMatches;
+
+  Timer? _typingDebounce;
+  static const Duration _typingDelay = Duration(milliseconds: 350);
+
   int _searchRequestId = 0;
 
   bool get _isArabic {
@@ -59,13 +71,6 @@ class _MedicineSearchScreenState
         .languageCode
         .toLowerCase() ==
         'ar';
-  }
-
-  String _t({
-    required String en,
-    required String ar,
-  }) {
-    return _isArabic ? ar : en;
   }
 
   @override
@@ -164,21 +169,21 @@ class _MedicineSearchScreenState
         return;
       }
 
+      final total = await MophMedicineService().countMatches(query);
+      if (!mounted || requestId != _searchRequestId) {
+        return;
+      }
+
       setState(() {
         _results = List<MedicinePrice>.unmodifiable(results);
+        _totalMatches = total;
         _hasMore = results.length == _pageSize;
         _isLoading = false;
 
         if (_results.isEmpty) {
           _errorMessage = query.isEmpty
-              ? _t(
-                  en: 'No medicines found in the database.',
-                  ar: 'لم يتم العثور على أدوية في قاعدة البيانات.',
-                )
-              : _t(
-                  en: 'No matching medicines were found in the MOPH Lebanon database.',
-                  ar: 'لم يتم العثور على أدوية مطابقة في قاعدة بيانات وزارة الصحة.',
-                );
+              ? appText(_isArabic).noMedicinesFoundInTheDatabase
+              : appText(_isArabic).noMatchingMedicinesWereFoundIn;
         }
       });
     } catch (error, stackTrace) {
@@ -196,47 +201,25 @@ class _MedicineSearchScreenState
         _results = const <MedicinePrice>[];
         _hasMore = false;
         _isLoading = false;
-        _errorMessage = _t(
-          en: 'Search service is temporarily unavailable.',
-          ar: 'خدمة البحث غير متاحة حالياً.',
-        );
+        _errorMessage = appText(_isArabic).searchServiceIsTemporarilyUnavailable;
       });
     }
   }
 
 
 
+  /// Back to the whole list, the same as opening the page.
   void _clearSearch() {
-    ++_searchRequestId;
-
+    _typingDebounce?.cancel();
     _searchController.clear();
-
     _searchFocusNode.requestFocus();
-
-    setState(() {
-      _results =
-      const <MedicinePrice>[];
-
-      _lastQuery = '';
-      _errorMessage = null;
-
-      _hasSearched = false;
-      _isLoading = false;
-    });
+    if (_scrollController.hasClients) _scrollController.jumpTo(0);
+    _search(reset: true);
   }
 
   Future<void> _syncMophPrices() async {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          _t(
-            en: 'Syncing with Ministry of Public Health (MOPH) website...',
-            ar: 'جاري التحديث مع موقع وزارة الصحة العامة...',
-          ),
-        ),
-        duration: const Duration(seconds: 2),
-      ),
-    );
+    // The app bar button shows the progress and can't be pressed meanwhile.
+    if (MophMedicineService().isSyncing) return;
 
     final result = await MophMedicineService().updateFromMophWebsite();
 
@@ -312,12 +295,7 @@ class _MedicineSearchScreenState
                 ),
                 Expanded(
                   child: Text(
-                    _t(
-                      en:
-                      'Select medicine',
-                      ar:
-                      'اختيار الدواء',
-                    ),
+                    appText(_isArabic).selectMedicine,
                     style:
                     TextStyle(
                       color:
@@ -341,12 +319,7 @@ class _MedicineSearchScreenState
                     .start,
                 children: [
                   Text(
-                    _t(
-                      en:
-                      'Confirm that this is the exact database product you want to select.',
-                      ar:
-                      'تأكد أن هذا هو المنتج الدوائي الدقيق الذي تريد اختياره من قاعدة البيانات.',
-                    ),
+                    appText(_isArabic).confirmThatThisIsTheExact,
                     style:
                     TextStyle(
                       color:
@@ -376,12 +349,7 @@ class _MedicineSearchScreenState
                   ),
 
                   _SafetyMessage(
-                    message: _t(
-                      en:
-                      'Manual selection identifies this database product only. It does not verify that it is the same medicine written on a prescription and does not authorize substitution.',
-                      ar:
-                      'الاختيار اليدوي يحدد هذا المنتج من قاعدة البيانات فقط. لا يؤكد أنه نفس الدواء المكتوب في الوصفة ولا يسمح بالاستبدال تلقائيًا.',
-                    ),
+                    message: appText(_isArabic).manualSelectionIdentifiesThisDatabaseProduct,
                   ),
                 ],
               ),
@@ -394,10 +362,7 @@ class _MedicineSearchScreenState
                   ).pop(false);
                 },
                 child: Text(
-                  _t(
-                    en: 'Cancel',
-                    ar: 'إلغاء',
-                  ),
+                  appText(_isArabic).cancel,
                 ),
               ),
               FilledButton.icon(
@@ -410,10 +375,7 @@ class _MedicineSearchScreenState
                   Icons.check_rounded,
                 ),
                 label: Text(
-                  _t(
-                    en: 'Select',
-                    ar: 'اختيار',
-                  ),
+                  appText(_isArabic).select,
                 ),
               ),
             ],
@@ -468,18 +430,8 @@ class _MedicineSearchScreenState
         appBar: AppBar(
           title: Text(
             widget.selectionMode
-                ? _t(
-              en:
-              'Select Medicine',
-              ar:
-              'اختيار الدواء',
-            )
-                : _t(
-              en:
-              'Medicine Search',
-              ar:
-              'البحث عن دواء',
-            ),
+                ? appText(_isArabic).selectMedicine2
+                : appText(_isArabic).medicineSearch,
             style:
             const TextStyle(
               fontWeight:
@@ -488,12 +440,9 @@ class _MedicineSearchScreenState
           ),
           centerTitle: true,
           actions: [
-            IconButton(
-              tooltip: _t(
-                en: 'Sync MOPH Lebanon Prices',
-                ar: 'تحديث أسعار وزارة الصحة',
-              ),
-              icon: const Icon(Icons.sync_rounded),
+            MophSyncButton(
+              tooltip: appText(_isArabic).syncMophLebanonPrices,
+              color: palette.textPrimary,
               onPressed: _syncMophPrices,
             ),
           ],
@@ -515,6 +464,11 @@ class _MedicineSearchScreenState
             child: Column(
               children: [
                 _buildSearchArea(),
+
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: MophSyncProgressLine(isArabic: _isArabic),
+                ),
 
                 if (_isLoading)
                   const LinearProgressIndicator(
@@ -549,13 +503,7 @@ class _MedicineSearchScreenState
 
     return Container(
       width: double.infinity,
-      padding:
-      const EdgeInsets.fromLTRB(
-        16,
-        14,
-        16,
-        15,
-      ),
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
       decoration: BoxDecoration(
         color: palette.surface,
         border: Border(
@@ -624,12 +572,7 @@ class _MedicineSearchScreenState
                       ),
                       Expanded(
                         child: Text(
-                          _t(
-                            en:
-                            'Search the database and select the exact product after checking its strength, form, pack and manufacturer.',
-                            ar:
-                            'ابحث في قاعدة البيانات واختر المنتج الدقيق بعد التأكد من التركيز والشكل والعبوة والشركة المصنعة.',
-                          ),
+                          appText(_isArabic).searchTheDatabaseAndSelectThe,
                           style:
                           TextStyle(
                             color:
@@ -652,153 +595,23 @@ class _MedicineSearchScreenState
                 ),
               ],
 
-              Row(
-                crossAxisAlignment:
-                CrossAxisAlignment
-                    .start,
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment:
-                      CrossAxisAlignment
-                          .start,
-                      children: [
-                        Text(
-                          widget.selectionMode
-                              ? _t(
-                            en:
-                            'Find the exact product',
-                            ar:
-                            'ابحث عن المنتج الدقيق',
-                          )
-                              : _t(
-                            en:
-                            'Lebanese medicine database',
-                            ar:
-                            'قاعدة بيانات الأدوية في لبنان',
-                          ),
-                          style:
-                          TextStyle(
-                            color:
-                            palette
-                                .textPrimary,
-                            fontSize:
-                            21,
-                            height:
-                            1.2,
-                            fontWeight:
-                            FontWeight
-                                .w900,
-                          ),
-                        ),
-                        const SizedBox(
-                          height: 4,
-                        ),
-                        Text(
-                          _t(
-                            en:
-                            'Search by brand or active ingredient. Add strength or dosage form to narrow the results.',
-                            ar:
-                            'ابحث باسم العلامة التجارية أو المادة الفعالة. أضف التركيز أو الشكل الدوائي لتضييق النتائج.',
-                          ),
-                          style:
-                          TextStyle(
-                            color:
-                            palette
-                                .textSecondary,
-                            height:
-                            1.35,
-                            fontWeight:
-                            FontWeight
-                                .w500,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  if (!widget
-                      .selectionMode) ...[
-                    const SizedBox(
-                      width: 10,
-                    ),
-
-                    Container(
-                      padding:
-                      const EdgeInsets.symmetric(
-                        horizontal: 9,
-                        vertical: 6,
-                      ),
-                      decoration:
-                      BoxDecoration(
-                        color:
-                        PharmaLensColors
-                            .teal
-                            .withValues(
-                          alpha:
-                          isDark
-                              ? 0.17
-                              : 0.10,
-                        ),
-                        borderRadius:
-                        BorderRadius.circular(
-                          20,
-                        ),
-                      ),
-                      child: Row(
-                        mainAxisSize:
-                        MainAxisSize.min,
-                        children: [
-                          const Icon(
-                            Icons
-                                .storage_rounded,
-                            size: 16,
-                            color:
-                            PharmaLensColors
-                                .teal,
-                          ),
-                          const SizedBox(
-                            width: 5,
-                          ),
-                          Text(
-                            _t(
-                              en:
-                              'Database',
-                              ar:
-                              'قاعدة البيانات',
-                            ),
-                            style:
-                            const TextStyle(
-                              color:
-                              PharmaLensColors
-                                  .teal,
-                              fontSize:
-                              12,
-                              fontWeight:
-                              FontWeight
-                                  .w800,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ],
+              Text(
+                widget.selectionMode
+                    ? appText(_isArabic).findTheExactProduct
+                    : appText(_isArabic).lebaneseMedicineDatabase,
+                style: TextStyle(color: palette.textPrimary, fontSize: 17, height: 1.2, fontWeight: FontWeight.w900),
               ),
-
-              const SizedBox(
-                height: 13,
+              const SizedBox(height: 2),
+              Text(
+                appText(_isArabic).searchByBrandOrActiveIngredient,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(color: palette.textSecondary, fontSize: 12.5, fontWeight: FontWeight.w500),
               ),
+              const SizedBox(height: 10),
 
-              LayoutBuilder(
-                builder: (
-                    context,
-                    constraints,
-                    ) {
-                  final horizontal =
-                      constraints.maxWidth >=
-                          620;
-
+              Builder(
+                builder: (context) {
                   final searchField =
                   TextField(
                     controller:
@@ -827,15 +640,17 @@ class _MedicineSearchScreenState
                     },
                     onChanged: (_) {
                       setState(() {});
+                      // Search as the user types, once they pause.
+                      _typingDebounce?.cancel();
+                      _typingDebounce = Timer(_typingDelay, () {
+                        if (mounted && _searchController.text.trim() != _lastQuery) {
+                          _search(reset: true);
+                        }
+                      });
                     },
                     decoration:
                     InputDecoration(
-                      hintText: _t(
-                        en:
-                        'Example: Augmentin 625 mg',
-                        ar:
-                        'مثال: Augmentin 625 mg',
-                      ),
+                      hintText: appText(_isArabic).exampleAugmentin625Mg,
                       prefixIcon:
                       const Icon(
                         Icons
@@ -848,12 +663,7 @@ class _MedicineSearchScreenState
                           ? null
                           : IconButton(
                         tooltip:
-                        _t(
-                          en:
-                          'Clear search',
-                          ar:
-                          'مسح البحث',
-                        ),
+                        appText(_isArabic).clearSearch,
                         onPressed:
                         _clearSearch,
                         icon:
@@ -865,71 +675,30 @@ class _MedicineSearchScreenState
                     ),
                   );
 
-                  final searchButton =
-                  SizedBox(
-                    height: 50,
-                    child:
-                    FilledButton.icon(
-                      onPressed:
-                      _isLoading
-                          ? null
-                          : () {
-                        _search();
-                      },
-                      icon:
-                      const Icon(
-                        Icons
-                            .medication_outlined,
+                  // A square button beside the field (results also update
+                  // as the user types).
+                  final searchButton = SizedBox.square(
+                    dimension: 48,
+                    child: IconButton.filled(
+                      tooltip: appText(_isArabic).searchMedicines,
+                      onPressed: _isLoading ? null : () => _search(),
+                      style: IconButton.styleFrom(
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                       ),
-                      label: Text(
-                        _isLoading
-                            ? _t(
-                          en:
-                          'Searching...',
-                          ar:
-                          'جارٍ البحث...',
-                        )
-                            : _t(
-                          en:
-                          'Search medicines',
-                          ar:
-                          'بحث عن الأدوية',
-                        ),
-                      ),
+                      icon: _isLoading
+                          ? const SizedBox.square(
+                              dimension: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                            )
+                          : const Icon(Icons.search_rounded),
                     ),
                   );
 
-                  if (horizontal) {
-                    return Row(
-                      children: [
-                        Expanded(
-                          child:
-                          searchField,
-                        ),
-                        const SizedBox(
-                          width: 12,
-                        ),
-                        SizedBox(
-                          width: 190,
-                          child:
-                          searchButton,
-                        ),
-                      ],
-                    );
-                  }
-
-                  return Column(
+                  return Row(
                     children: [
-                      searchField,
-                      const SizedBox(
-                        height: 10,
-                      ),
-                      SizedBox(
-                        width:
-                        double.infinity,
-                        child:
-                        searchButton,
-                      ),
+                      Expanded(child: searchField),
+                      const SizedBox(width: 8),
+                      searchButton,
                     ],
                   );
                 },
@@ -955,24 +724,10 @@ class _MedicineSearchScreenState
         title:
         _errorMessage!,
         subtitle: canRetry
-            ? _t(
-          en:
-          'Check the spelling or try a shorter medicine name.',
-          ar:
-          'تحقق من كتابة الاسم أو جرّب جزءًا أقصر من اسم الدواء.',
-        )
-            : _t(
-          en:
-          'Enter a brand or active ingredient.',
-          ar:
-          'أدخل اسم العلامة التجارية أو المادة الفعالة.',
-        ),
+            ? appText(_isArabic).checkTheSpellingOrTryA
+            : appText(_isArabic).enterABrandOrActiveIngredient,
         buttonText: canRetry
-            ? _t(
-          en: 'Try again',
-          ar:
-          'إعادة المحاولة',
-        )
+            ? appText(_isArabic).tryAgain
             : null,
         onPressed: canRetry
             ? () {
@@ -993,31 +748,11 @@ class _MedicineSearchScreenState
             : Icons
             .medication_liquid_outlined,
         title: widget.selectionMode
-            ? _t(
-          en:
-          'Search and select the exact product',
-          ar:
-          'ابحث واختر المنتج الدقيق',
-        )
-            : _t(
-          en:
-          'Find medicine information',
-          ar:
-          'ابحث عن معلومات الدواء',
-        ),
+            ? appText(_isArabic).searchAndSelectTheExactProduct
+            : appText(_isArabic).findMedicineInformation,
         subtitle: widget.selectionMode
-            ? _t(
-          en:
-          'Review the exact product record before selecting it.',
-          ar:
-          'راجع سجل المنتج الدقيق قبل اختياره.',
-        )
-            : _t(
-          en:
-          'Search product records, prices, reviewed information and verified-composition alternatives.',
-          ar:
-          'ابحث في سجلات المنتجات والأسعار والمعلومات المراجعة والبدائل ذات التركيبة المتحقّق منها.',
-        ),
+            ? appText(_isArabic).reviewTheExactProductRecordBefore
+            : appText(_isArabic).searchProductRecordsPricesReviewedInformation,
       );
     }
 
@@ -1026,18 +761,8 @@ class _MedicineSearchScreenState
       return _MessageState(
         icon:
         Icons.manage_search_rounded,
-        title: _t(
-          en:
-          'Searching the medicine database...',
-          ar:
-          'جارٍ البحث في قاعدة بيانات الأدوية...',
-        ),
-        subtitle: _t(
-          en:
-          'Please wait a moment.',
-          ar:
-          'يرجى الانتظار قليلًا.',
-        ),
+        title: appText(_isArabic).searchingTheMedicineDatabase,
+        subtitle: appText(_isArabic).pleaseWaitAMoment,
       );
     }
 
@@ -1045,18 +770,8 @@ class _MedicineSearchScreenState
       return _MessageState(
         icon:
         Icons.search_off_rounded,
-        title: _t(
-          en:
-          'No medicines found',
-          ar:
-          'لم يتم العثور على أدوية',
-        ),
-        subtitle: _t(
-          en:
-          'Try using only part of the medicine name.',
-          ar:
-          'جرّب استخدام جزء من اسم الدواء.',
-        ),
+        title: appText(_isArabic).noMedicinesFound,
+        subtitle: appText(_isArabic).tryUsingOnlyPartOfThe,
       );
     }
 
@@ -1147,7 +862,9 @@ class _MedicineSearchScreenState
                       query:
                       _lastQuery,
                       resultCount:
-                      _results.length,
+                      _totalMatches ?? _results.length,
+                      isBrowsing:
+                      _lastQuery.isEmpty,
                       isArabic:
                       _isArabic,
                     ),
@@ -1206,6 +923,7 @@ class _MedicineSearchScreenState
   @override
   void dispose() {
     ++_searchRequestId;
+    _typingDebounce?.cancel();
 
     _scrollController.removeListener(_onScroll);
     _scrollController.dispose();
@@ -1222,11 +940,15 @@ class _ResultsSummary
     required this.query,
     required this.resultCount,
     required this.isArabic,
+    this.isBrowsing = false,
   });
 
   final String query;
+
+  /// Total matches (not just the loaded page).
   final int resultCount;
   final bool isArabic;
+  final bool isBrowsing;
 
   @override
   Widget build(BuildContext context) {
@@ -1245,9 +967,11 @@ class _ResultsSummary
             CrossAxisAlignment.start,
             children: [
               Text(
-                isArabic
-                    ? '$resultCount نتيجة'
-                    : '$resultCount ${resultCount == 1 ? 'result' : 'results'}',
+                isBrowsing
+                    ? (appText(isArabic).medicinesInTheMophList(formatCount(resultCount)))
+                    : (isArabic
+                    ? '${formatCount(resultCount)} نتيجة مطابقة'
+                    : '${formatCount(resultCount)} ${resultCount == 1 ? 'match' : 'matches'}'),
                 style:
                 TextStyle(
                   color:
@@ -1265,9 +989,7 @@ class _ResultsSummary
                   height: 3,
                 ),
                 Text(
-                  isArabic
-                      ? 'البحث عن “$query”'
-                      : 'For “$query”',
+                  appText(isArabic).forText(query),
                   textDirection:
                   TextDirection.ltr,
                   style:
@@ -1288,9 +1010,7 @@ class _ResultsSummary
           width: 12,
         ),
         Text(
-          isArabic
-              ? 'اضغط للتفاصيل'
-              : 'Tap for details',
+          appText(isArabic).tapForDetails,
           style:
           TextStyle(
             color:
@@ -1545,9 +1265,7 @@ class _MedicineCard
                     _MedicineTag(
                       icon: Icons
                           .verified_outlined,
-                      text: isArabic
-                          ? 'مصدر رسمي'
-                          : 'Official source',
+                      text: appText(isArabic).officialSource,
                       accent:
                       PharmaLensColors
                           .teal,
@@ -1574,9 +1292,7 @@ class _MedicineCard
                 _DetailLine(
                   icon: Icons
                       .factory_outlined,
-                  label: isArabic
-                      ? 'الشركة'
-                      : 'Manufacturer',
+                  label: appText(isArabic).manufacturer,
                   value: medicine
                       .displayManufacturer,
                 ),
@@ -1605,9 +1321,7 @@ class _MedicineCard
                           .receipt_long_outlined,
                     ),
                     label: Text(
-                      isArabic
-                          ? 'التفاصيل'
-                          : 'Details',
+                      appText(isArabic).details,
                     ),
                   );
 
@@ -1623,9 +1337,7 @@ class _MedicineCard
                     ),
                     label:
                     Text(
-                      isArabic
-                          ? 'اختيار هذا الدواء'
-                          : 'Select medicine',
+                      appText(isArabic).selectMedicine3,
                     ),
                   )
                       : null;
@@ -1748,9 +1460,7 @@ class _PriceSummary
               CrossAxisAlignment.start,
               children: [
                 Text(
-                  isArabic
-                      ? 'السعر المسجل'
-                      : 'Recorded price',
+                  appText(isArabic).recordedPrice,
                   style:
                   TextStyle(
                     color:
@@ -1884,45 +1594,35 @@ class _SelectionProductCard
           ),
 
           _ConfirmationRow(
-            label: isArabic
-                ? 'التركيز'
-                : 'Strength',
+            label: appText(isArabic).strength,
             value:
             medicine
                 .displayStrength,
           ),
 
           _ConfirmationRow(
-            label: isArabic
-                ? 'الشكل'
-                : 'Form',
+            label: appText(isArabic).form,
             value:
             medicine
                 .displayDosageForm,
           ),
 
           _ConfirmationRow(
-            label: isArabic
-                ? 'العبوة'
-                : 'Pack',
+            label: appText(isArabic).pack,
             value:
             medicine
                 .displayPackSize,
           ),
 
           _ConfirmationRow(
-            label: isArabic
-                ? 'الشركة'
-                : 'Manufacturer',
+            label: appText(isArabic).manufacturer,
             value:
             medicine
                 .displayManufacturer,
           ),
 
           _ConfirmationRow(
-            label: isArabic
-                ? 'السعر'
-                : 'Price',
+            label: appText(isArabic).price,
             value:
             medicine
                 .formattedPrice,

@@ -3,15 +3,19 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../app/app_shell.dart';
+import '../l10n/app_text.dart';
 import '../models/medicine_reminder.dart';
 import '../models/prescription_record.dart';
 import '../services/moph_medicine_service.dart';
 import '../services/prescription_history_service.dart';
+import '../services/dose_log_service.dart';
+import '../services/health_profile_service.dart';
 import '../services/reminder_service.dart';
 import '../theme/pharmalens_theme.dart';
 import '../utils/formatters.dart';
 import '../widgets/chatbot_view.dart';
 import '../widgets/responsive.dart';
+import '../widgets/sync_progress.dart';
 import 'analysis_screen.dart';
 import 'my_health_screen.dart';
 import 'settings_screen.dart';
@@ -34,10 +38,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
   bool get _isArabic {
     return Localizations.localeOf(context).languageCode.toLowerCase() == 'ar';
-  }
-
-  String _text({required String en, required String ar}) {
-    return _isArabic ? ar : en;
   }
 
   bool get _cameraAvailable {
@@ -75,10 +75,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
       if (fileSize <= 0) {
         _showSafeError(
-          _text(
-            en: 'The selected image is empty. Please choose another image.',
-            ar: 'الصورة المختارة فارغة. يرجى اختيار صورة أخرى.',
-          ),
+          appText(_isArabic).theSelectedImageIsEmptyPlease,
         );
 
         return;
@@ -86,10 +83,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
       if (fileSize > _maximumImageBytes) {
         _showSafeError(
-          _text(
-            en: 'The selected image is too large. Please use a smaller image.',
-            ar: 'حجم الصورة كبير جدًا. يرجى استخدام صورة أصغر.',
-          ),
+          appText(_isArabic).theSelectedImageIsTooLarge,
         );
 
         return;
@@ -99,10 +93,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
       if (imageBytes.isEmpty) {
         _showSafeError(
-          _text(
-            en: 'The selected image could not be read.',
-            ar: 'تعذر قراءة الصورة المختارة.',
-          ),
+          appText(_isArabic).theSelectedImageCouldNotBe,
         );
 
         return;
@@ -128,10 +119,7 @@ class _HomeScreenState extends State<HomeScreen> {
       }
 
       _showSafeError(
-        _text(
-          en: 'The image could not be opened. Please try again.',
-          ar: 'تعذر فتح الصورة. يرجى إعادة المحاولة.',
-        ),
+        appText(_isArabic).theImageCouldNotBeOpened,
       );
     } finally {
       if (mounted) {
@@ -140,6 +128,12 @@ class _HomeScreenState extends State<HomeScreen> {
         });
       }
     }
+  }
+
+  /// My Health, opened on the given tab on phones (see MyHealthScreen).
+  void _openMyHealth(int tab) {
+    MyHealthScreen.requestedTab.value = tab;
+    _openTab(AppTab.myHealth);
   }
 
   void _openTab(AppTab tab) {
@@ -190,23 +184,37 @@ class _HomeScreenState extends State<HomeScreen> {
               final twoColumns = constraints.maxWidth >= 920;
 
               final primary = <Widget>[
-                _ScanCard(
-                  isArabic: _isArabic,
-                  isLoading: _isPickingImage,
-                  showCamera: _cameraAvailable,
-                  onCamera: () => _pickPrescriptionImage(ImageSource.camera),
-                  onUpload: () => _pickPrescriptionImage(ImageSource.gallery),
+                FadeSlideIn(
+                  child: _ScanCard(
+                    isArabic: _isArabic,
+                    isLoading: _isPickingImage,
+                    showCamera: _cameraAvailable,
+                    onCamera: () => _pickPrescriptionImage(ImageSource.camera),
+                    onUpload: () => _pickPrescriptionImage(ImageSource.gallery),
+                  ),
                 ),
                 const SizedBox(height: 18),
-                _QuickActions(isArabic: _isArabic, onOpen: _openTab),
+                FadeSlideIn(
+                  delay: const Duration(milliseconds: 90),
+                  child: _QuickActions(isArabic: _isArabic, onOpen: _openTab),
+                ),
               ];
 
               final secondary = <Widget>[
-                _TodayReminders(isArabic: _isArabic, onOpenAll: () => _openTab(AppTab.myHealth)),
+                FadeSlideIn(
+                  delay: const Duration(milliseconds: 160),
+                  child: _TodayDoses(isArabic: _isArabic, onOpenAll: () => _openMyHealth(1)),
+                ),
                 const SizedBox(height: 18),
-                _RecentScans(isArabic: _isArabic, onOpenAll: () => _openTab(AppTab.myHealth)),
+                FadeSlideIn(
+                  delay: const Duration(milliseconds: 220),
+                  child: _RecentScans(isArabic: _isArabic, onOpenAll: () => _openMyHealth(0)),
+                ),
                 const SizedBox(height: 18),
-                _DataStatusCard(isArabic: _isArabic),
+                FadeSlideIn(
+                  delay: const Duration(milliseconds: 280),
+                  child: _DataStatusCard(isArabic: _isArabic),
+                ),
               ];
 
               return SingleChildScrollView(
@@ -215,12 +223,21 @@ class _HomeScreenState extends State<HomeScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      _TopBar(
-                        isArabic: _isArabic,
-                        showBrand: compact,
-                        onSettings: () => _openTab(AppTab.settings),
-                      ),
-                      const SizedBox(height: 18),
+                      // Wider layouts show the logo and Settings in the sidebar.
+                      if (compact) ...[
+                        _TopBar(
+                          isArabic: _isArabic,
+                          onSettings: () => _openTab(AppTab.settings),
+                        ),
+                        const SizedBox(height: 18),
+                      ] else ...[
+                        const SizedBox(height: 8),
+                        Align(
+                          alignment: AlignmentDirectional.centerEnd,
+                          child: MophSyncChip(isArabic: _isArabic),
+                        ),
+                        const SizedBox(height: 8),
+                      ],
                       if (twoColumns)
                         Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -249,76 +266,65 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
+/// Phone header: the logo, and Settings at the other end.
 class _TopBar extends StatelessWidget {
-  const _TopBar({required this.isArabic, required this.showBrand, required this.onSettings});
+  const _TopBar({required this.isArabic, required this.onSettings});
 
   final bool isArabic;
-  final bool showBrand;
   final VoidCallback onSettings;
 
   @override
   Widget build(BuildContext context) {
     final palette = PharmaLensTheme.paletteOf(context);
-    final hour = DateTime.now().hour;
-    final greeting = hour < 12
-        ? (isArabic ? 'صباح الخير' : 'Good morning')
-        : hour < 18
-            ? (isArabic ? 'مساء الخير' : 'Good afternoon')
-            : (isArabic ? 'مساء الخير' : 'Good evening');
 
     return Row(
       children: [
-        if (showBrand) ...[
-          Container(
-            width: 42,
-            height: 42,
-            decoration: BoxDecoration(
-              gradient: PharmaLensGradients.primary,
-              borderRadius: BorderRadius.circular(13),
-              boxShadow: PharmaLensShadows.cyanGlow,
-            ),
-            child: const Icon(Icons.medication_liquid_rounded, color: Colors.white, size: 24),
-          ),
-          const SizedBox(width: 11),
-        ],
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if (showBrand)
-                Text.rich(
+        ClipRRect(
+          borderRadius: BorderRadius.circular(12),
+          child: Image.asset('assets/branding/app_icon.png', width: 40, height: 40),
+        ),
+        const SizedBox(width: 10),
+        // The wordmark is part of the logo: it does not grow with large
+        // text, and shrinks on very narrow screens.
+        Flexible(
+          flex: 3,
+          child: MediaQuery.withClampedTextScaling(
+            maxScaleFactor: 1.2,
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: AlignmentDirectional.centerStart,
+              child: Semantics(
+                header: true,
+                child: Text.rich(
                   TextSpan(
-                    style: TextStyle(color: palette.textPrimary, fontSize: 21, fontWeight: FontWeight.w900, letterSpacing: -0.4),
+                    style: TextStyle(color: palette.textPrimary, fontSize: 22, fontWeight: FontWeight.w900, letterSpacing: -0.4),
                     children: const [
                       TextSpan(text: 'Pharma'),
                       TextSpan(text: 'Lens', style: TextStyle(color: PharmaLensColors.teal)),
                     ],
                   ),
-                )
-              else
-                Semantics(
-                  header: true,
-                  child: Text(
-                    greeting,
-                    style: TextStyle(color: palette.textPrimary, fontSize: 28, fontWeight: FontWeight.w900, letterSpacing: -0.5),
-                  ),
+                  textDirection: TextDirection.ltr,
                 ),
-              Text(
-                isArabic ? 'افهم وصفتك وتأكد من أدويتك بأمان.' : 'Understand your prescription and check your medicines safely.',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(color: palette.textSecondary, fontSize: 12.5, fontWeight: FontWeight.w600),
               ),
-            ],
+            ),
           ),
         ),
-        if (showBrand)
-          IconButton(
-            tooltip: isArabic ? 'الإعدادات' : 'Settings',
-            onPressed: onSettings,
-            icon: const Icon(Icons.settings_outlined),
-            style: IconButton.styleFrom(side: BorderSide(color: palette.border)),
+        const SizedBox(width: 8),
+        // Shows while the medicine list loads or checks for a newer one.
+        Expanded(
+          flex: 2,
+          child: Align(
+            alignment: AlignmentDirectional.centerEnd,
+            child: MophSyncChip(isArabic: isArabic),
           ),
+        ),
+        const SizedBox(width: 8),
+        IconButton(
+          tooltip: appText(isArabic).settings,
+          onPressed: onSettings,
+          icon: const Icon(Icons.settings_outlined),
+          style: IconButton.styleFrom(side: BorderSide(color: palette.border)),
+        ),
       ],
     );
   }
@@ -344,7 +350,7 @@ class _ScanCard extends StatelessWidget {
     final isDark = PharmaLensTheme.isDark(context);
 
     return Container(
-      decoration: PharmaLensDecorations.heroCard(borderRadius: BorderRadius.circular(26), isDark: isDark),
+      decoration: PharmaLensDecorations.heroCard(borderRadius: BorderRadius.circular(28), isDark: isDark),
       clipBehavior: Clip.antiAlias,
       child: Stack(
         children: [
@@ -367,125 +373,164 @@ class _ScanCard extends StatelessWidget {
             ),
           ),
           Padding(
-            padding: const EdgeInsets.all(24),
+            padding: const EdgeInsets.all(22),
             child: LayoutBuilder(
               builder: (context, constraints) {
-                final showArt = constraints.maxWidth >= 520;
+                final wide = constraints.maxWidth >= 540;
+                final narrow = constraints.maxWidth < 360;
 
-                final text = Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                final badge = Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.10),
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(color: Colors.white.withValues(alpha: 0.14)),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.verified_user_outlined, color: PharmaLensColors.brightCyan, size: 15),
+                      const SizedBox(width: 6),
+                      // Always one line; very narrow screens shrink it.
+                      Flexible(
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Text(
+                            appText(isArabic).checkedAgainstTheMophList,
+                            maxLines: 1,
+                            style: const TextStyle(color: PharmaLensColors.brightCyan, fontSize: 10.8, fontWeight: FontWeight.w900),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+
+                final title = Semantics(
+                  header: true,
+                  child: Text(
+                    appText(isArabic).readYourPrescription,
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: narrow ? 24 : 29,
+                      height: 1.1,
+                      letterSpacing: isArabic ? 0 : -0.8,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                );
+
+                final body = Text(
+                  appText(isArabic).takeAPhotoOrUploadOne,
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.80),
+                    fontSize: 13.5,
+                    height: isArabic ? 1.6 : 1.5,
+                    fontWeight: FontWeight.w600,
+                  ),
+                );
+
+                final cameraButton = FilledButton.icon(
+                  onPressed: isLoading ? null : onCamera,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: PharmaLensColors.cyan,
+                    foregroundColor: Colors.white,
+                    minimumSize: const Size(0, 52),
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  ),
+                  icon: const Icon(Icons.photo_camera_rounded, size: 20),
+                  label: FittedBox(fit: BoxFit.scaleDown, child: Text(appText(isArabic).takePhoto)),
+                );
+
+                final uploadButton = FilledButton.icon(
+                  onPressed: isLoading ? null : onUpload,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: showCamera ? Colors.white.withValues(alpha: 0.14) : PharmaLensColors.cyan,
+                    foregroundColor: Colors.white,
+                    minimumSize: const Size(0, 52),
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    side: showCamera ? BorderSide(color: Colors.white.withValues(alpha: 0.25)) : null,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  ),
+                  icon: isLoading
+                      ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2.2, color: Colors.white))
+                      : const Icon(Icons.upload_file_rounded, size: 20),
+                  label: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      isLoading ? appText(isArabic).opening : appText(isArabic).uploadImage,
+                    ),
+                  ),
+                );
+
+                // Side by side at every width; each takes half.
+                final buttons = Row(
                   children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.10),
-                        borderRadius: BorderRadius.circular(999),
-                        border: Border.all(color: Colors.white.withValues(alpha: 0.14)),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(Icons.verified_user_outlined, color: PharmaLensColors.brightCyan, size: 15),
-                          const SizedBox(width: 6),
-                          Flexible(
-                            child: Text(
-                              isArabic ? 'مطابقة مع لائحة وزارة الصحة' : 'CHECKED AGAINST THE MOPH LIST',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(color: PharmaLensColors.brightCyan, fontSize: 10.8, fontWeight: FontWeight.w900),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    Semantics(
-                      header: true,
+                    if (showCamera) ...[
+                      Expanded(child: PressableScale(child: cameraButton)),
+                      const SizedBox(width: 10),
+                    ],
+                    Expanded(child: PressableScale(child: uploadButton)),
+                  ],
+                );
+
+                final tip = Row(
+                  children: [
+                    Icon(Icons.lightbulb_outline_rounded, color: Colors.white.withValues(alpha: 0.6), size: 15),
+                    const SizedBox(width: 6),
+                    Expanded(
                       child: Text(
-                        isArabic ? 'اقرأ وصفتك الطبية' : 'Read your prescription',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: constraints.maxWidth < 380 ? 25 : 30,
-                          height: 1.1,
-                          letterSpacing: isArabic ? 0 : -0.8,
-                          fontWeight: FontWeight.w900,
-                        ),
+                        appText(isArabic).useAClearWellLitPhoto,
+                        style: TextStyle(color: Colors.white.withValues(alpha: 0.6), fontSize: 11.5, fontWeight: FontWeight.w600),
                       ),
-                    ),
-                    const SizedBox(height: 10),
-                    Text(
-                      isArabic
-                          ? 'صوّر الوصفة أو ارفع صورتها. نقرأ أسماء الأدوية ونطابقها مع الأدوية المسجلة وأسعارها الرسمية، وننبهك عند تكرار المادة أو وجود حساسية.'
-                          : 'Take a photo or upload one. We read the medicine names, match them to registered products and official prices, and flag duplicates or allergies.',
-                      style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.78),
-                        fontSize: 13.5,
-                        height: isArabic ? 1.6 : 1.5,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    Wrap(
-                      spacing: 10,
-                      runSpacing: 10,
-                      children: [
-                        if (showCamera)
-                          FilledButton.icon(
-                            onPressed: isLoading ? null : onCamera,
-                            style: FilledButton.styleFrom(
-                              backgroundColor: PharmaLensColors.cyan,
-                              minimumSize: const Size(0, 50),
-                            ),
-                            icon: const Icon(Icons.photo_camera_rounded),
-                            label: Text(isArabic ? 'التقاط صورة' : 'Take photo'),
-                          ),
-                        FilledButton.icon(
-                          onPressed: isLoading ? null : onUpload,
-                          style: FilledButton.styleFrom(
-                            backgroundColor: showCamera ? Colors.white.withValues(alpha: 0.14) : PharmaLensColors.cyan,
-                            minimumSize: const Size(0, 50),
-                          ),
-                          icon: isLoading
-                              ? const SizedBox(
-                                  width: 18,
-                                  height: 18,
-                                  child: CircularProgressIndicator(strokeWidth: 2.2, color: Colors.white),
-                                )
-                              : const Icon(Icons.upload_file_rounded),
-                          label: Text(
-                            isLoading
-                                ? (isArabic ? 'جارٍ فتح الصورة...' : 'Opening image...')
-                                : (isArabic ? 'رفع صورة' : 'Upload image'),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      isArabic
-                          ? 'نصيحة: صورة واضحة ومضاءة جيدًا تُظهر الوصفة كاملة.'
-                          : 'Tip: use a clear, well-lit photo that shows the whole prescription.',
-                      style: TextStyle(color: Colors.white.withValues(alpha: 0.6), fontSize: 11.5, fontWeight: FontWeight.w600),
                     ),
                   ],
                 );
 
-                if (!showArt) return text;
+                final illustration = Image.asset(
+                  'assets/images/scan_illustration.png',
+                  fit: BoxFit.contain,
+                  semanticLabel: appText(isArabic).aPhoneReadingAPrescription,
+                );
 
-                return Row(
-                  children: [
-                    Expanded(child: text),
-                    const SizedBox(width: 20),
-                    Container(
-                      width: 128,
-                      height: 150,
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.08),
-                        borderRadius: BorderRadius.circular(26),
-                        border: Border.all(color: Colors.white.withValues(alpha: 0.16)),
+                if (wide) {
+                  return Row(
+                    children: [
+                      Expanded(
+                        flex: 6,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [badge, const SizedBox(height: 16), title, const SizedBox(height: 10), body, const SizedBox(height: 20), buttons, const SizedBox(height: 12), tip],
+                        ),
                       ),
-                      child: const Icon(Icons.document_scanner_outlined, color: PharmaLensColors.brightCyan, size: 58),
+                      const SizedBox(width: 16),
+                      Expanded(flex: 4, child: illustration),
+                    ],
+                  );
+                }
+
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [badge, const SizedBox(height: 14), title],
+                          ),
+                        ),
+                        SizedBox(width: narrow ? 84 : 112, height: narrow ? 68 : 90, child: illustration),
+                      ],
                     ),
+                    const SizedBox(height: 10),
+                    body,
+                    const SizedBox(height: 18),
+                    buttons,
+                    const SizedBox(height: 12),
+                    tip,
                   ],
                 );
               },
@@ -505,110 +550,112 @@ class _QuickActions extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final actions = <(IconData, String, String, AppTab)>[
-      (Icons.search_rounded, isArabic ? 'ابحث عن دواء' : 'Find a medicine', isArabic ? 'الأسعار والبدائل الرسمية' : 'Official prices and alternatives', AppTab.medicines),
-      (Icons.medical_services_outlined, isArabic ? 'الأطباء' : 'Doctors', isArabic ? 'دليل نقابة الأطباء' : 'Order of Physicians directory', AppTab.doctors),
-      (Icons.local_pharmacy_outlined, isArabic ? 'صيدليات قريبة' : 'Nearby pharmacies', isArabic ? 'على الخريطة' : 'On the map', AppTab.pharmacies),
-      (Icons.favorite_outline_rounded, isArabic ? 'ملفي الصحي' : 'My health', isArabic ? 'السجل والتذكيرات والحساسية' : 'History, reminders, allergies', AppTab.myHealth),
+    final palette = PharmaLensTheme.paletteOf(context);
+    final actions = <(IconData, String, String, AppTab, Color)>[
+      (Icons.search_rounded, appText(isArabic).findAMedicine, appText(isArabic).officialPricesAndAlternatives, AppTab.medicines, PharmaLensColors.teal),
+      (Icons.medical_services_outlined, appText(isArabic).doctors, appText(isArabic).orderOfPhysiciansDirectory, AppTab.doctors, PharmaLensColors.accentBlue),
+      (Icons.local_pharmacy_outlined, appText(isArabic).nearbyPharmacies, appText(isArabic).onTheMap, AppTab.pharmacies, PharmaLensColors.accentCoral),
+      (Icons.favorite_outline_rounded, appText(isArabic).myHealth, appText(isArabic).historyRemindersAllergies, AppTab.myHealth, PharmaLensColors.accentViolet),
     ];
 
     return LayoutBuilder(
       builder: (context, constraints) {
         final columns = constraints.maxWidth >= 620 ? 4 : 2;
-        final spacing = 12.0;
+        const spacing = 12.0;
+        final tileWidth = (constraints.maxWidth - spacing * (columns - 1)) / columns;
 
-        Widget tile((IconData, String, String, AppTab) action) {
-          return SurfaceCard(
-            padding: const EdgeInsets.all(16),
-            onTap: () => onOpen(action.$4),
-            semanticLabel: '${action.$2}. ${action.$3}',
-            child: ExcludeSemantics(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Container(
-                    width: 44,
-                    height: 44,
-                    decoration: BoxDecoration(
-                      color: PharmaLensTheme.paletteOf(context).tealSurface,
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: Icon(action.$1, color: PharmaLensColors.teal),
+        Widget tile((IconData, String, String, AppTab, Color) action) {
+          return SizedBox(
+            width: tileWidth,
+            child: PressableScale(
+              child: SurfaceCard(
+                padding: const EdgeInsets.all(14),
+                onTap: () => onOpen(action.$4),
+                semanticLabel: '${action.$2}. ${action.$3}',
+                child: ExcludeSemantics(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            width: 42,
+                            height: 42,
+                            decoration: BoxDecoration(
+                              color: action.$5.withValues(alpha: PharmaLensTheme.isDark(context) ? 0.22 : 0.12),
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                            child: Icon(action.$1, color: action.$5),
+                          ),
+                          const Spacer(),
+                          Icon(
+                            Directionality.of(context) == TextDirection.rtl ? Icons.arrow_back_rounded : Icons.arrow_forward_rounded,
+                            size: 18,
+                            color: palette.textMuted,
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      // Two lines so "Nearby pharmacies" is never cut.
+                      Text(
+                        action.$2,
+                        maxLines: 2,
+                        style: TextStyle(color: palette.textPrimary, fontWeight: FontWeight.w900, fontSize: 14.5, height: 1.2),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        action.$3,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(color: palette.textSecondary, fontSize: 11.8, height: 1.35, fontWeight: FontWeight.w600),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 12),
-                  Text(
-                    action.$2,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: PharmaLensTheme.paletteOf(context).textPrimary,
-                      fontWeight: FontWeight.w900,
-                      fontSize: 14.5,
-                    ),
-                  ),
-                  const SizedBox(height: 3),
-                  Text(
-                    action.$3,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: PharmaLensTheme.paletteOf(context).textSecondary,
-                      fontSize: 11.8,
-                      height: 1.35,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
+                ),
               ),
             ),
           );
         }
 
-        final rows = <Widget>[];
-        for (var start = 0; start < actions.length; start += columns) {
-          if (rows.isNotEmpty) rows.add(SizedBox(height: spacing));
-          rows.add(
-            IntrinsicHeight(
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  for (var i = start; i < start + columns && i < actions.length; i++) ...[
-                    if (i > start) SizedBox(width: spacing),
-                    Expanded(child: tile(actions[i])),
-                  ],
-                ],
-              ),
-            ),
-          );
-        }
-
-        return Column(children: rows);
+        return Wrap(
+          spacing: spacing,
+          runSpacing: spacing,
+          children: [for (final action in actions) tile(action)],
+        );
       },
     );
   }
 }
 
-class _TodayReminders extends StatelessWidget {
-  const _TodayReminders({required this.isArabic, required this.onOpenAll});
+class _TodayDoses extends StatelessWidget {
+  const _TodayDoses({required this.isArabic, required this.onOpenAll});
 
   final bool isArabic;
   final VoidCallback onOpenAll;
 
+  static const int _shownDoses = 4;
+
+  static List<DueDose> _upcomingFirst(List<DueDose> doses, DoseLogService log) {
+    bool answered(DueDose d) => log.statusOf(d.reminder.id, d.day, d.minutes) != null;
+    return <DueDose>[...doses.where((d) => !answered(d)), ...doses.where(answered)];
+  }
+
   @override
   Widget build(BuildContext context) {
     final service = ReminderService();
+    final log = DoseLogService();
     final palette = PharmaLensTheme.paletteOf(context);
 
     return ListenableBuilder(
-      listenable: service,
+      listenable: Listenable.merge(<Listenable>[service, log]),
       builder: (context, _) {
         final now = DateTime.now();
         final nowMinutes = now.hour * 60 + now.minute;
-        final doses = <(int, MedicineReminder)>[
-          for (final reminder in service.reminders.where((r) => r.enabled && !r.isExpired))
-            for (final time in reminder.times) (time, reminder),
-        ]..sort((a, b) => a.$1.compareTo(b.$1));
-        final upcoming = doses.where((d) => d.$1 >= nowMinutes).take(3).toList();
+        final doses = service.todaysDoses();
+        final taken = doses.where((d) => log.statusOf(d.reminder.id, d.day, d.minutes) == DoseStatus.taken).length;
+        final refills = service.reminders
+            .where((r) => r.refillDate != null && r.refillDate!.difference(now).inDays <= 3 && !r.isExpired)
+            .toList();
 
         return SurfaceCard(
           child: Column(
@@ -616,52 +663,188 @@ class _TodayReminders extends StatelessWidget {
             children: [
               SectionTitle(
                 icon: Icons.alarm_rounded,
-                title: isArabic ? 'جرعات اليوم' : "Today's doses",
-                trailing: TextButton(onPressed: onOpenAll, child: Text(isArabic ? 'الكل' : 'All')),
+                title: appText(isArabic).todaySDoses,
+                trailing: service.reminders.isEmpty ? null : TextButton(onPressed: onOpenAll, child: Text(appText(isArabic).all)),
               ),
               const SizedBox(height: 10),
               if (doses.isEmpty)
-                Text(
-                  isArabic
-                      ? 'لا تذكيرات بعد. بعد فحص وصفة، اضغط "تذكير" بجانب أي دواء.'
-                      : 'No reminders yet. After scanning a prescription, tap "Remind me" next to a medicine.',
-                  style: TextStyle(color: palette.textSecondary, fontSize: 12.5, height: 1.45),
-                )
-              else if (upcoming.isEmpty)
-                Text(
-                  isArabic ? 'انتهت جرعات اليوم.' : 'All of today\'s doses are done.',
-                  style: TextStyle(color: palette.textSecondary, fontSize: 12.5),
-                )
-              else
-                for (final dose in upcoming)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 6),
-                    child: Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                          decoration: BoxDecoration(color: palette.tealSurface, borderRadius: BorderRadius.circular(10)),
-                          child: Text(
-                            MedicineReminder.formatTime(dose.$1),
-                            style: const TextStyle(color: PharmaLensColors.teal, fontWeight: FontWeight.w900),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Text(
-                            dose.$2.medicineName,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(color: palette.textPrimary, fontWeight: FontWeight.w800),
-                          ),
-                        ),
-                      ],
+                Row(
+                  children: [
+                    Image.asset('assets/images/reminder_illustration.png', width: 64, height: 64),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        appText(isArabic).noRemindersYetAfterScanningA,
+                        style: TextStyle(color: palette.textSecondary, fontSize: 12.5, height: 1.45),
+                      ),
                     ),
+                  ],
+                )
+              else ...[
+                Row(
+                  children: [
+                    Expanded(
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(99),
+                        child: LinearProgressIndicator(
+                          value: doses.isEmpty ? 0 : taken / doses.length,
+                          minHeight: 8,
+                          backgroundColor: palette.tealSurface,
+                          color: PharmaLensColors.success,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Text(
+                      appText(isArabic).ofText(taken, doses.length),
+                      style: TextStyle(color: palette.textSecondary, fontWeight: FontWeight.w800, fontSize: 12.5),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                // Doses still to answer first; taken or skipped ones after.
+                for (final dose in _upcomingFirst(doses, log).take(_shownDoses))
+                  _DoseRow(
+                    dose: dose,
+                    status: log.statusOf(dose.reminder.id, dose.day, dose.minutes),
+                    isPast: dose.minutes <= nowMinutes,
+                    isArabic: isArabic,
                   ),
+                if (doses.length > _shownDoses)
+                  _ShowAllButton(label: appText(isArabic).showAllCount(doses.length), onPressed: onOpenAll),
+              ],
+              for (final reminder in refills.take(2))
+                Container(
+                  margin: const EdgeInsets.only(top: 10),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: PharmaLensColors.warning.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.shopping_bag_outlined, color: PharmaLensColors.warning, size: 20),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          appText(isArabic).mayRunOutOnTimeTo(reminder.medicineName, MaterialLocalizations.of(context).formatMediumDate(reminder.refillDate!)),
+                          style: TextStyle(color: palette.textPrimary, fontSize: 12.5, fontWeight: FontWeight.w700),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
             ],
           ),
         );
       },
+    );
+  }
+}
+
+/// A button at the bottom of a home card that opens the full list.
+class _ShowAllButton extends StatelessWidget {
+  const _ShowAllButton({required this.label, required this.onPressed});
+
+  final String label;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final rtl = Directionality.of(context) == TextDirection.rtl;
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: OutlinedButton(
+        onPressed: onPressed,
+        style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(40)),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(label),
+            const SizedBox(width: 6),
+            Icon(rtl ? Icons.arrow_back_rounded : Icons.arrow_forward_rounded, size: 18),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _DoseRow extends StatelessWidget {
+  const _DoseRow({required this.dose, required this.status, required this.isPast, required this.isArabic});
+
+  final DueDose dose;
+  final DoseStatus? status;
+  final bool isPast;
+  final bool isArabic;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = PharmaLensTheme.paletteOf(context);
+    final done = status == DoseStatus.taken;
+    final skipped = status == DoseStatus.skipped;
+    final owner = HealthProfileService().byId(dose.reminder.profileId);
+    final person = owner == null || owner.isOwner ? '' : owner.name;
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+              color: done ? PharmaLensColors.success.withValues(alpha: 0.14) : palette.tealSurface,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Text(
+              MedicineReminder.formatTime(dose.minutes),
+              style: TextStyle(
+                color: done ? PharmaLensColors.success : PharmaLensColors.teal,
+                fontWeight: FontWeight.w900,
+                fontFeatures: const [FontFeature.tabularFigures()],
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  dose.reminder.medicineName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: palette.textPrimary,
+                    fontWeight: FontWeight.w800,
+                    decoration: done ? TextDecoration.lineThrough : null,
+                  ),
+                ),
+                if (dose.reminder.isAlarm || skipped || person.isNotEmpty)
+                  Text(
+                    [
+                      if (person.isNotEmpty) person,
+                      if (skipped) isArabic ? 'تم التخطي' : 'Skipped' else if (dose.reminder.isAlarm) isArabic ? 'منبه' : 'Alarm',
+                    ].join(' · '),
+                    style: TextStyle(color: palette.textMuted, fontSize: 11.5, fontWeight: FontWeight.w600),
+                  ),
+              ],
+            ),
+          ),
+          if (done)
+            const Icon(Icons.check_circle_rounded, color: PharmaLensColors.success)
+          else
+            TextButton.icon(
+              onPressed: () => ReminderService().markTaken(dose),
+              style: TextButton.styleFrom(
+                foregroundColor: isPast ? PharmaLensColors.success : palette.textSecondary,
+                visualDensity: VisualDensity.compact,
+              ),
+              icon: const Icon(Icons.check_rounded, size: 18),
+              label: Text(appText(isArabic).taken2),
+            ),
+        ],
+      ),
     );
   }
 }
@@ -680,7 +863,8 @@ class _RecentScans extends StatelessWidget {
     return ListenableBuilder(
       listenable: history,
       builder: (context, _) {
-        final recent = history.records.take(3).toList();
+        final all = history.records;
+        final recent = all.take(3).toList();
 
         return SurfaceCard(
           child: Column(
@@ -688,20 +872,23 @@ class _RecentScans extends StatelessWidget {
             children: [
               SectionTitle(
                 icon: Icons.receipt_long_outlined,
-                title: isArabic ? 'آخر الوصفات' : 'Recent prescriptions',
-                trailing: recent.isEmpty ? null : TextButton(onPressed: onOpenAll, child: Text(isArabic ? 'الكل' : 'All')),
+                title: appText(isArabic).recentPrescriptions,
+                trailing: recent.isEmpty ? null : TextButton(onPressed: onOpenAll, child: Text(appText(isArabic).all)),
               ),
               const SizedBox(height: 6),
               if (recent.isEmpty)
                 Padding(
                   padding: const EdgeInsets.only(top: 4),
                   child: Text(
-                    isArabic ? 'ستظهر هنا الوصفات التي تفحصها.' : 'Prescriptions you scan will appear here.',
+                    appText(isArabic).prescriptionsYouScanWillAppearHere,
                     style: TextStyle(color: palette.textSecondary, fontSize: 12.5),
                   ),
                 )
-              else
+              else ...[
                 for (final record in recent) _RecentScanTile(record: record, isArabic: isArabic),
+                if (all.length > recent.length)
+                  _ShowAllButton(label: appText(isArabic).showAllCount(all.length), onPressed: onOpenAll),
+              ],
             ],
           ),
         );
@@ -720,25 +907,33 @@ class _RecentScanTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final palette = PharmaLensTheme.paletteOf(context);
     final names = record.medicines.map((m) => m.displayName).where((n) => n.isNotEmpty).join(', ');
+    final verified = record.medicines.where((m) => m.verified).length;
 
     return ListTile(
       contentPadding: EdgeInsets.zero,
       onTap: () => Navigator.of(context).push(
         MaterialPageRoute<void>(builder: (_) => PrescriptionRecordScreen(record: record)),
       ),
-      leading: const Icon(Icons.description_outlined, color: PharmaLensColors.teal),
+      leading: Container(
+        width: 42,
+        height: 42,
+        decoration: BoxDecoration(color: palette.tealSurface, borderRadius: BorderRadius.circular(12)),
+        child: const Icon(Icons.description_outlined, color: PharmaLensColors.teal),
+      ),
       title: Text(
         MaterialLocalizations.of(context).formatMediumDate(record.createdAt),
         style: TextStyle(color: palette.textPrimary, fontWeight: FontWeight.w800, fontSize: 14),
       ),
       subtitle: Text(
-        names.isEmpty ? (isArabic ? 'لا أدوية مقروءة' : 'No readable medicines') : names,
+        names.isEmpty
+            ? appText(isArabic).noReadableMedicines
+            : '$names · ${appText(isArabic).verified2(verified)}',
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
         style: TextStyle(color: palette.textSecondary, fontSize: 12.5),
       ),
       trailing: Icon(
-        Icons.chevron_right_rounded,
+        Directionality.of(context) == TextDirection.rtl ? Icons.chevron_left_rounded : Icons.chevron_right_rounded,
         color: palette.textMuted,
       ),
     );
@@ -750,53 +945,84 @@ class _DataStatusCard extends StatelessWidget {
 
   final bool isArabic;
 
+  Future<void> _sync(BuildContext context) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final result = await MophMedicineService().checkAndUpdateIfStale(force: true);
+    messenger.showSnackBar(SnackBar(content: Text(result.describe(isArabic: isArabic))));
+  }
+
   @override
   Widget build(BuildContext context) {
-    final palette = PharmaLensTheme.paletteOf(context);
     final moph = MophMedicineService();
-    final stale = moph.isDataStale;
-    final failed = moph.loadError != null;
 
-    final title = failed
-        ? (isArabic ? 'تعذر تحميل لائحة الأدوية' : 'Medicine list could not be loaded')
-        : stale
-            ? (isArabic ? 'قد تكون الأسعار قديمة' : 'Prices may be out of date')
-            : (isArabic ? 'لائحة أسعار وزارة الصحة' : 'MOPH price list');
+    // The list loads after the first frame; show it once it is in.
+    return ListenableBuilder(
+      listenable: moph.changes,
+      builder: (context, _) {
+        final palette = PharmaLensTheme.paletteOf(context);
+        final loading = !moph.isInitialized;
+        final stale = moph.isDataStale;
+        final failed = moph.loadError != null;
 
-    final body = failed
-        ? (isArabic ? 'أعد تشغيل التطبيق. إذا استمرت المشكلة، أعد تثبيته.' : 'Restart the app. If it keeps happening, reinstall it.')
-        : isArabic
-            ? 'لائحة ${moph.publishedDate} · ${formatCount(moph.totalMedicineCount)} دواء مسجل.${stale ? ' تحقق من السعر في الصيدلية.' : ''}'
-            : 'List of ${moph.publishedDate} · ${formatCount(moph.totalMedicineCount)} registered medicines.${stale ? ' Confirm the price at the pharmacy.' : ''}';
+        final title = loading
+            ? appText(isArabic).mophPriceList
+            : failed
+                ? appText(isArabic).medicineListCouldNotBeLoaded
+                : stale
+                    ? appText(isArabic).pricesMayBeOutOfDate
+                    : appText(isArabic).mophPriceList;
 
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: failed || stale ? palette.dangerSurface : palette.tealSurface,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: (failed || stale ? PharmaLensColors.warning : PharmaLensColors.teal).withValues(alpha: 0.25),
-        ),
-      ),
-      child: Row(
-        children: [
-          Icon(
-            failed ? Icons.error_outline_rounded : stale ? Icons.history_toggle_off_rounded : Icons.fact_check_outlined,
-            color: failed || stale ? PharmaLensColors.warning : PharmaLensColors.teal,
+        final body = loading
+            ? ''
+            : failed
+                ? appText(isArabic).restartTheAppIfItKeeps
+                : isArabic
+                    ? 'لائحة ${moph.publishedDate} · ${formatCount(moph.totalMedicineCount)} دواء مسجل.${stale ? ' تحقق من السعر في الصيدلية.' : ''}'
+                    : 'List of ${moph.publishedDate} · ${formatCount(moph.totalMedicineCount)} registered medicines.${stale ? ' Confirm the price at the pharmacy.' : ''}';
+
+        final warn = failed || stale;
+
+        return Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: warn ? palette.dangerSurface : palette.tealSurface,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: (warn ? PharmaLensColors.warning : PharmaLensColors.teal).withValues(alpha: 0.25)),
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(title, style: TextStyle(color: palette.textPrimary, fontWeight: FontWeight.w900)),
-                const SizedBox(height: 2),
-                Text(body, style: TextStyle(color: palette.textSecondary, fontSize: 12.5, height: 1.4)),
-              ],
-            ),
+          child: Row(
+            children: [
+              // A still icon: loading takes a moment, and an endless spinner
+              // here would also keep the page from ever settling in tests.
+              if (loading)
+                const Icon(Icons.hourglass_top_rounded, color: PharmaLensColors.teal)
+              else
+                Icon(
+                  failed ? Icons.error_outline_rounded : stale ? Icons.history_toggle_off_rounded : Icons.fact_check_outlined,
+                  color: warn ? PharmaLensColors.warning : PharmaLensColors.teal,
+                ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title, style: TextStyle(color: palette.textPrimary, fontWeight: FontWeight.w900)),
+                    if (body.isNotEmpty) ...[
+                      const SizedBox(height: 2),
+                      Text(body, style: TextStyle(color: palette.textSecondary, fontSize: 12.5, height: 1.4)),
+                    ],
+                    MophSyncProgressLine(isArabic: isArabic),
+                  ],
+                ),
+              ),
+              if (moph.canCheckForUpdates && !failed)
+                MophSyncButton(
+                  tooltip: appText(isArabic).checkForANewerList,
+                  onPressed: () => _sync(context),
+                ),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 }
@@ -817,9 +1043,7 @@ class _SafetyFooter extends StatelessWidget {
         const SizedBox(width: 8),
         Expanded(
           child: Text(
-            isArabic
-                ? 'فارما لينس أداة مساعدة للمراجعة. تغيير الدواء أو استبداله يحتاج دائمًا إلى رأي الطبيب أو الصيدلي.'
-                : 'PharmaLens helps you review. Changing or substituting a medicine always needs your doctor or pharmacist.',
+            appText(isArabic).pharmalensHelpsYouReviewChangingOr,
             style: TextStyle(color: palette.textMuted, fontSize: 12, height: 1.45, fontWeight: FontWeight.w600),
           ),
         ),

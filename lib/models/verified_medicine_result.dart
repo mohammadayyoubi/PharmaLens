@@ -1,6 +1,7 @@
 import 'ai_handwriting_result.dart';
 import 'medicine_knowledge.dart';
 import 'medicine_price.dart';
+import '../l10n/app_text.dart';
 
 enum MedicineVerificationStatus {
   verified,
@@ -559,113 +560,77 @@ class VerifiedMedicineResult {
     required bool isArabic,
   }) {
     if (failed) {
-      return isArabic
-          ? 'تعذر التحقق'
-          : 'Verification unavailable';
+      return appText(isArabic).verificationUnavailable;
     }
 
     if (wasSkipped) {
       return suggestion.isCategoryOnly
-          ? isArabic
-          ? 'تم تحديد فئة فقط'
-          : 'Category only'
-          : isArabic
-          ? 'النص غير مقروء'
-          : 'Unreadable medicine';
+          ? appText(isArabic).categoryOnly
+          : appText(isArabic).unreadableMedicine;
     }
 
     if (isNotFound) {
-      return isArabic
-          ? 'لا يوجد منتج مؤكد'
-          : 'No confirmed product';
+      return appText(isArabic).noConfirmedProduct;
     }
 
     if (isManualSelection) {
-      return isArabic
-          ? 'منتج مختار يدويًا'
-          : 'Database product selected';
+      return appText(isArabic).databaseProductSelected;
     }
 
     if (hasVerifiedPrescriptionMatch) {
-      return isArabic
-          ? 'مطابقة الوصفة مؤكدة'
-          : 'Prescription match verified';
+      return appText(isArabic).prescriptionMatchVerified;
     }
 
     if (isPossible &&
         hasMultipleCandidates) {
-      return isArabic
-          ? 'يجب تحديد المنتج الدقيق'
-          : 'Exact variant needs confirmation';
+      return appText(isArabic).exactVariantNeedsConfirmation;
     }
 
     if (isPossible) {
-      return isArabic
-          ? 'مطابقة وصفة محتملة'
-          : 'Possible prescription match';
+      return appText(isArabic).possiblePrescriptionMatch;
     }
 
-    return isArabic
-        ? 'يتطلب مراجعة'
-        : 'Requires review';
+    return appText(isArabic).requiresReview;
   }
 
   String statusExplanation({
     required bool isArabic,
   }) {
     if (failed) {
-      return isArabic
-          ? 'تمت قراءة الوصفة، لكن تعذر الوصول إلى قاعدة الأدوية حاليًا.'
-          : 'The prescription was read, but the medicine database could not be checked.';
+      return appText(isArabic).thePrescriptionWasReadButThe;
     }
 
     if (wasSkipped &&
         suggestion.isCategoryOnly) {
-      return isArabic
-          ? 'تم اكتشاف فئة دوائية فقط. لا يمكن تحديد منتج دوائي أو عرض معلومات خاصة بمنتج.'
-          : 'Only a medicine category was detected. An exact product cannot be selected safely.';
+      return appText(isArabic).onlyAMedicineCategoryWasDetected;
     }
 
     if (wasSkipped) {
-      return isArabic
-          ? 'تعذر قراءة اسم الدواء بأمان. لا يجوز تخمين المنتج.'
-          : 'The medicine name could not be read safely. Do not guess the product.';
+      return appText(isArabic).theMedicineNameCouldNotBe;
     }
 
     if (isNotFound) {
-      return isArabic
-          ? 'تمت قراءة النص، لكن لم يتم العثور على منتج مطابق بأمان في قاعدة البيانات.'
-          : 'The text was read, but no safe matching medicine product was confirmed in the database.';
+      return appText(isArabic).theTextWasReadButNo;
     }
 
     if (isManualSelection) {
-      return isArabic
-          ? 'تم اختيار هذا المنتج يدويًا من قاعدة البيانات. هوية المنتج معروفة، لكن مطابقته مع الوصفة لم يتم تأكيدها تلقائيًا.'
-          : 'This product was selected manually from the database. Its product identity is known, but its prescription match was not automatically verified.';
+      return appText(isArabic).thisProductWasSelectedManuallyFrom;
     }
 
     if (hasVerifiedPrescriptionMatch) {
-      return isArabic
-          ? 'تمت مطابقة نص الوصفة مع هذا المنتج في قاعدة البيانات.'
-          : 'The prescription text was matched to this database product.';
+      return appText(isArabic).thePrescriptionTextWasMatchedTo;
     }
 
     if (isPossible &&
         candidateCount > 1) {
-      return isArabic
-          ? 'تم العثور على أكثر من منتج محتمل. يجب مراجعة التركيز والشكل الدوائي لتحديد المنتج الدقيق.'
-          : 'Multiple product variants remain possible. Review strength and dosage form before confirming the exact product.';
+      return appText(isArabic).multipleProductVariantsRemainPossibleReview;
     }
 
     if (isPossible) {
-      return isArabic
-          ? 'هذا المنتج مرشح محتمل فقط ويحتاج إلى تأكيد قبل اعتماد مطابقته مع الوصفة.'
-          : 'This is only a possible database candidate and requires confirmation before accepting the prescription match.';
+      return appText(isArabic).thisIsOnlyAPossibleDatabase;
     }
 
-    return isArabic
-        ? 'يجب مراجعة المنتج قبل المتابعة.'
-        : 'The product must be reviewed before continuing.';
+    return appText(isArabic).theProductMustBeReviewedBefore;
   }
 
   String localizedTherapeuticClass({

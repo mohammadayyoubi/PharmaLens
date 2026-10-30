@@ -1,19 +1,24 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import '../l10n/app_text.dart';
 import '../models/medicine_price.dart';
 import '../models/medicine_reminder.dart';
 import '../models/prescription_record.dart';
 import '../services/health_profile_service.dart';
+import '../services/medication_list_service.dart';
 import '../services/medication_safety_service.dart';
 import '../services/moph_medicine_service.dart';
 import '../services/prescription_history_service.dart';
+import '../services/dose_log_service.dart';
 import '../services/reminder_service.dart';
 import '../theme/pharmalens_theme.dart';
 import '../widgets/chatbot_view.dart';
 import '../widgets/reminder_editor.dart';
+import '../widgets/reminder_setup_sheet.dart';
 import '../widgets/safety_alert_card.dart';
 import '../widgets/responsive.dart';
 import 'medicine_details_screen.dart';
@@ -22,6 +27,10 @@ import 'medicine_details_screen.dart';
 /// allergies. Everything here stays on the device.
 class MyHealthScreen extends StatefulWidget {
   const MyHealthScreen({super.key});
+
+  /// Set before switching to My Health to open a tab on phones:
+  /// 0 prescriptions, 1 reminders, 2 health.
+  static final ValueNotifier<int?> requestedTab = ValueNotifier<int?>(null);
 
   @override
   State<MyHealthScreen> createState() => _MyHealthScreenState();
@@ -33,8 +42,6 @@ class _MyHealthScreenState extends State<MyHealthScreen> {
   final HealthProfileService _profile = HealthProfileService();
 
   bool get _isArabic => Localizations.localeOf(context).languageCode == 'ar';
-
-  String _t({required String en, required String ar}) => _isArabic ? ar : en;
 
   @override
   void initState() {
@@ -70,20 +77,33 @@ class _MyHealthScreenState extends State<MyHealthScreen> {
                           Semantics(
                             header: true,
                             child: Text(
-                              _t(en: 'My health', ar: 'ملفي الصحي'),
+                              appText(_isArabic).myHealth,
                               style: TextStyle(color: palette.textPrimary, fontSize: 26, fontWeight: FontWeight.w900),
                             ),
                           ),
                           const SizedBox(height: 2),
                           Text(
-                            _t(
-                              en: 'Your prescriptions, reminders and allergies. Saved on this device only.',
-                              ar: 'وصفاتك وتذكيراتك وحساسيتك. محفوظة على هذا الجهاز فقط.',
-                            ),
+                            appText(_isArabic).prescriptionsRemindersAllergiesAndConditionsSaved,
                             style: TextStyle(color: palette.textSecondary, fontSize: 13, fontWeight: FontWeight.w600),
                           ),
+                          const SizedBox(height: 10),
+                          _ProfileSwitcher(isArabic: _isArabic),
                         ],
                       ),
+                    ),
+                    const SizedBox(width: 8),
+                    IconButton.filledTonal(
+                      tooltip: appText(_isArabic).shareMedicineList,
+                      icon: const Icon(Icons.ios_share_rounded),
+                      onPressed: () async {
+                        final messenger = ScaffoldMessenger.of(context);
+                        final shared = await const MedicationListService().share(isArabic: _isArabic);
+                        if (!shared) {
+                          messenger.showSnackBar(
+                            SnackBar(content: Text(appText(_isArabic).medicineListCopied)),
+                          );
+                        }
+                      },
                     ),
                   ],
                 ),
@@ -122,7 +142,8 @@ class _MyHealthScreenState extends State<MyHealthScreen> {
 
               return DefaultTabController(
                 length: 3,
-                child: Column(
+                child: _TabRequests(
+                  child: Column(
                   children: [
                     PageFrame(child: header),
                     PageFrame(
@@ -133,9 +154,9 @@ class _MyHealthScreenState extends State<MyHealthScreen> {
                         indicatorColor: PharmaLensColors.teal,
                         labelStyle: const TextStyle(fontWeight: FontWeight.w800),
                         tabs: [
-                          Tab(text: _t(en: 'Prescriptions', ar: 'الوصفات')),
-                          Tab(text: _t(en: 'Reminders', ar: 'التذكيرات')),
-                          Tab(text: _t(en: 'Allergies', ar: 'الحساسية')),
+                          Tab(text: appText(_isArabic).prescriptions),
+                          Tab(text: appText(_isArabic).reminders),
+                          Tab(text: appText(_isArabic).health),
                         ],
                       ),
                     ),
@@ -155,6 +176,7 @@ class _MyHealthScreenState extends State<MyHealthScreen> {
                       ),
                     ),
                   ],
+                  ),
                 ),
               );
             },
@@ -174,50 +196,51 @@ class _HistorySection extends StatelessWidget {
 
   final bool isArabic;
 
-  String _t({required String en, required String ar}) => isArabic ? ar : en;
-
   @override
   Widget build(BuildContext context) {
     final history = PrescriptionHistoryService();
+    final profile = HealthProfileService();
 
     return ListenableBuilder(
-      listenable: history,
+      listenable: Listenable.merge(<Listenable>[history, profile]),
       builder: (context, _) {
-        final records = history.records;
+        final records = history.records.where((r) => r.profileId == profile.active.id).toList();
 
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             SectionTitle(
               icon: Icons.receipt_long_outlined,
-              title: _t(en: 'Scanned prescriptions', ar: 'الوصفات المفحوصة'),
+              title: appText(isArabic).scannedPrescriptions,
               subtitle: records.isEmpty
                   ? null
-                  : _t(en: '${records.length} saved', ar: '${records.length} محفوظة'),
+                  : appText(isArabic).saved(records.length),
             ),
             const SizedBox(height: 12),
             if (records.isEmpty)
               _EmptyState(
                 icon: Icons.document_scanner_outlined,
-                text: _t(
-                  en: 'Prescriptions you scan appear here so you can review them later.',
-                  ar: 'تظهر هنا الوصفات التي تفحصها لتعود إليها لاحقًا.',
-                ),
+                text: appText(isArabic).prescriptionsYouScanAppearHereSo,
               )
             else
-              AdaptiveGrid(
-                minItemWidth: 300,
-                maxColumns: 2,
-                children: [
-                  for (final record in records)
-                    _HistoryCard(
-                      record: record,
-                      isArabic: isArabic,
-                      onTap: () => Navigator.of(context).push(
-                        MaterialPageRoute<void>(builder: (_) => PrescriptionRecordScreen(record: record)),
+              _Paged(
+                key: ValueKey<String>('history-${profile.active.id}'),
+                itemCount: records.length,
+                isArabic: isArabic,
+                builder: (context, shown) => AdaptiveGrid(
+                  minItemWidth: 300,
+                  maxColumns: 2,
+                  children: [
+                    for (final record in records.take(shown))
+                      _HistoryCard(
+                        record: record,
+                        isArabic: isArabic,
+                        onTap: () => Navigator.of(context).push(
+                          MaterialPageRoute<void>(builder: (_) => PrescriptionRecordScreen(record: record)),
+                        ),
                       ),
-                    ),
-                ],
+                  ],
+                ),
               ),
           ],
         );
@@ -265,16 +288,14 @@ class _HistoryCard extends StatelessWidget {
                 ],
                 const SizedBox(height: 8),
                 Text(
-                  names.isEmpty ? (isArabic ? 'لا أدوية مقروءة' : 'No readable medicines') : names.join(' • '),
+                  names.isEmpty ? appText(isArabic).noReadableMedicines : names.join(' • '),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(color: palette.textSecondary, fontSize: 12.5, height: 1.4),
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  isArabic
-                      ? '${record.verifiedCount} من ${record.medicines.length} متحقق منها'
-                      : '${record.verifiedCount} of ${record.medicines.length} verified',
+                  appText(isArabic).ofVerified(record.verifiedCount, record.medicines.length),
                   style: const TextStyle(color: PharmaLensColors.teal, fontSize: 12, fontWeight: FontWeight.w800),
                 ),
               ],
@@ -324,12 +345,25 @@ class PrescriptionRecordScreen extends StatelessWidget {
 
   final PrescriptionRecord record;
 
+  void _openPhoto(BuildContext context, String path) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => Scaffold(
+          backgroundColor: Colors.black,
+          appBar: AppBar(backgroundColor: Colors.black, foregroundColor: Colors.white),
+          body: InteractiveViewer(
+            maxScale: 5,
+            child: Center(child: Image.file(File(path), fit: BoxFit.contain)),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final palette = PharmaLensTheme.paletteOf(context);
     final isArabic = Localizations.localeOf(context).languageCode == 'ar';
-    String t({required String en, required String ar}) => isArabic ? ar : en;
-
     final moph = MophMedicineService();
     final products = record.medicines
         .map((m) => moph.findById(m.medicineId))
@@ -342,20 +376,20 @@ class PrescriptionRecordScreen extends StatelessWidget {
         title: Text(MaterialLocalizations.of(context).formatMediumDate(record.createdAt)),
         actions: [
           IconButton(
-            tooltip: t(en: 'Delete', ar: 'حذف'),
+            tooltip: appText(isArabic).delete,
             icon: const Icon(Icons.delete_outline_rounded),
             onPressed: () async {
               final confirmed = await showDialog<bool>(
                 context: context,
                 builder: (dialogContext) => AlertDialog(
-                  title: Text(t(en: 'Delete this prescription?', ar: 'حذف هذه الوصفة؟')),
-                  content: Text(t(en: 'The photo and details will be removed from this device.', ar: 'ستُحذف الصورة والتفاصيل من هذا الجهاز.')),
+                  title: Text(appText(isArabic).deleteThisPrescription),
+                  content: Text(appText(isArabic).thePhotoAndDetailsWillBe),
                   actions: [
-                    TextButton(onPressed: () => Navigator.of(dialogContext).pop(false), child: Text(t(en: 'Cancel', ar: 'إلغاء'))),
+                    TextButton(onPressed: () => Navigator.of(dialogContext).pop(false), child: Text(appText(isArabic).cancel)),
                     FilledButton(
                       style: FilledButton.styleFrom(backgroundColor: PharmaLensColors.danger),
                       onPressed: () => Navigator.of(dialogContext).pop(true),
-                      child: Text(t(en: 'Delete', ar: 'حذف')),
+                      child: Text(appText(isArabic).delete),
                     ),
                   ],
                 ),
@@ -372,32 +406,38 @@ class PrescriptionRecordScreen extends StatelessWidget {
       body: ListenableBuilder(
         listenable: HealthProfileService(),
         builder: (context, _) {
-          final alerts = const MedicationSafetyService().check(products, allergies: HealthProfileService().allergies);
+          final alerts = const MedicationSafetyService().check(
+            products,
+            allergies: HealthProfileService().allergies,
+            catalog: MophMedicineService().catalog,
+          );
 
-          return SingleChildScrollView(
-            padding: const EdgeInsets.only(bottom: 40),
-            child: PageFrame(
-              maxWidth: 1000,
-              child: Flex(
-                direction: Breakpoints.isCompact(context) ? Axis.vertical : Axis.horizontal,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (!kIsWeb && record.imagePath.isNotEmpty && File(record.imagePath).existsSync())
-                    Padding(
-                      padding: const EdgeInsetsDirectional.only(end: 20, bottom: 16),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(18),
-                        child: ConstrainedBox(
-                          constraints: const BoxConstraints(maxWidth: 360, maxHeight: 480),
-                          child: Image.file(File(record.imagePath), fit: BoxFit.contain),
-                        ),
+          final compact = Breakpoints.isCompact(context);
+          final hasImage = !kIsWeb && record.imagePath.isNotEmpty && File(record.imagePath).existsSync();
+
+          final photo = !hasImage
+              ? null
+              : GestureDetector(
+                  onTap: () => _openPhoto(context, record.imagePath),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(18),
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(maxWidth: compact ? double.infinity : 360, maxHeight: compact ? 260 : 480),
+                      child: Image.file(
+                        File(record.imagePath),
+                        fit: compact ? BoxFit.cover : BoxFit.contain,
+                        width: compact ? double.infinity : null,
+                        // Decode at display size, not the full photo.
+                        cacheWidth: 900,
+                        errorBuilder: (context, error, stackTrace) => const SizedBox.shrink(),
                       ),
                     ),
-                  Flexible(
-                    fit: Breakpoints.isCompact(context) ? FlexFit.loose : FlexFit.tight,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
+                  ),
+                );
+
+          final details = Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
                         if (record.doctorName.isNotEmpty || record.specialty.isNotEmpty)
                           Padding(
                             padding: const EdgeInsets.only(bottom: 12),
@@ -416,11 +456,36 @@ class PrescriptionRecordScreen extends StatelessWidget {
                             padding: const EdgeInsets.only(bottom: 10),
                             child: _RecordMedicineTile(entry: entry, isArabic: isArabic),
                           ),
+                        if (record.medicines.isEmpty)
+                          _EmptyState(
+                            icon: Icons.receipt_long_outlined,
+                            text: appText(isArabic).noMedicinesWereReadFromThis,
+                          ),
+            ],
+          );
+
+          // On phones the photo sits above the list. A Flexible inside a
+          // vertical scroll view has no height to share and paints nothing,
+          // which is why this page used to open blank.
+          return SingleChildScrollView(
+            padding: const EdgeInsets.only(bottom: 40),
+            child: PageFrame(
+              maxWidth: 1000,
+              child: compact
+                  ? Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        if (photo != null) ...[photo, const SizedBox(height: 16)],
+                        details,
+                      ],
+                    )
+                  : Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (photo != null) ...[photo, const SizedBox(width: 20)],
+                        Expanded(child: details),
                       ],
                     ),
-                  ),
-                ],
-              ),
             ),
           );
         },
@@ -470,7 +535,7 @@ class _RecordMedicineTile extends StatelessWidget {
                   Padding(
                     padding: const EdgeInsets.only(top: 4),
                     child: Text(
-                      isArabic ? 'غير متحقق منه: راجع الصيدلي.' : 'Not verified: check with your pharmacist.',
+                      appText(isArabic).notVerifiedCheckWithYourPharmacist,
                       style: const TextStyle(color: PharmaLensColors.warning, fontSize: 12, fontWeight: FontWeight.w700),
                     ),
                   ),
@@ -478,7 +543,7 @@ class _RecordMedicineTile extends StatelessWidget {
             ),
           ),
           IconButton(
-            tooltip: isArabic ? 'تذكير' : 'Remind me',
+            tooltip: appText(isArabic).remindMe,
             icon: const Icon(Icons.alarm_add_rounded, color: PharmaLensColors.teal),
             onPressed: () => showReminderEditor(
               context,
@@ -502,42 +567,57 @@ class _RemindersSection extends StatelessWidget {
 
   final bool isArabic;
 
-  String _t({required String en, required String ar}) => isArabic ? ar : en;
-
   @override
   Widget build(BuildContext context) {
     final service = ReminderService();
+    final log = DoseLogService();
     final palette = PharmaLensTheme.paletteOf(context);
 
     return ListenableBuilder(
-      listenable: service,
+      listenable: Listenable.merge(<Listenable>[service, log, HealthProfileService()]),
       builder: (context, _) {
-        final reminders = service.reminders;
+        final activeId = HealthProfileService().active.id;
+        final reminders = service.reminders.where((r) => r.profileId == activeId).toList();
 
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             SectionTitle(
               icon: Icons.alarm_rounded,
-              title: _t(en: 'Medicine reminders', ar: 'تذكيرات الأدوية'),
-              trailing: FilledButton.icon(
-                style: FilledButton.styleFrom(minimumSize: const Size(0, 40)),
-                onPressed: () => showReminderEditor(context),
-                icon: const Icon(Icons.add_rounded, size: 18),
-                label: Text(_t(en: 'Add', ar: 'إضافة')),
+              title: appText(isArabic).medicineReminders,
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    tooltip: appText(isArabic).reminderSettings,
+                    onPressed: () => showReminderSetupSheet(context),
+                    icon: const Icon(Icons.tune_rounded),
+                  ),
+                  FilledButton.icon(
+                    style: FilledButton.styleFrom(minimumSize: const Size(0, 40)),
+                    onPressed: () => showReminderEditor(context),
+                    icon: const Icon(Icons.add_rounded, size: 18),
+                    label: Text(appText(isArabic).add),
+                  ),
+                ],
               ),
             ),
             const SizedBox(height: 12),
             if (reminders.isEmpty)
               _EmptyState(
                 icon: Icons.alarm_add_outlined,
-                text: _t(
-                  en: 'Add a reminder from a scanned prescription or a medicine page, or tap Add.',
-                  ar: 'أضف تذكيرًا من وصفة مفحوصة أو صفحة دواء، أو اضغط إضافة.',
-                ),
+                text: appText(isArabic).addAReminderFromAScanned,
               )
             else
-              for (final reminder in reminders)
+              _Paged(
+                key: ValueKey<String>('reminders-$activeId'),
+                itemCount: reminders.length,
+                pageSize: 15,
+                isArabic: isArabic,
+                builder: (context, shown) => Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+              for (final reminder in reminders.take(shown))
                 Padding(
                   padding: const EdgeInsets.only(bottom: 10),
                   child: SurfaceCard(
@@ -549,12 +629,24 @@ class _RemindersSection extends StatelessWidget {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(
-                                reminder.medicineName,
-                                style: TextStyle(
-                                  color: reminder.isExpired ? palette.textMuted : palette.textPrimary,
-                                  fontWeight: FontWeight.w900,
-                                ),
+                              Row(
+                                children: [
+                                  Flexible(
+                                    child: Text(
+                                      reminder.medicineName,
+                                      style: TextStyle(
+                                        color: reminder.isExpired ? palette.textMuted : palette.textPrimary,
+                                        fontWeight: FontWeight.w900,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Icon(
+                                    reminder.isAlarm ? Icons.alarm_rounded : Icons.notifications_none_rounded,
+                                    size: 16,
+                                    color: reminder.isAlarm ? PharmaLensColors.warning : palette.textMuted,
+                                  ),
+                                ],
                               ),
                               const SizedBox(height: 2),
                               Text(
@@ -563,11 +655,12 @@ class _RemindersSection extends StatelessWidget {
                                   if (reminder.doseNote.isNotEmpty) reminder.doseNote,
                                   if (reminder.endDate != null)
                                     reminder.isExpired
-                                        ? _t(en: 'Ended', ar: 'انتهى')
-                                        : _t(
-                                            en: 'until ${MaterialLocalizations.of(context).formatShortDate(reminder.endDate!)}',
-                                            ar: 'حتى ${MaterialLocalizations.of(context).formatShortDate(reminder.endDate!)}',
-                                          ),
+                                        ? appText(isArabic).ended
+                                        : appText(isArabic).until(MaterialLocalizations.of(context).formatShortDate(reminder.endDate!)),
+                                  if (reminder.refillDate != null && !reminder.isExpired)
+                                    appText(isArabic).refillAround(MaterialLocalizations.of(context).formatShortDate(reminder.refillDate!)),
+                                  if (log.adherence(reminderId: reminder.id) case final rate?)
+                                    appText(isArabic).takenOfDosesInTheLast((rate * 100).round()),
                                 ].join('\n'),
                                 style: TextStyle(color: palette.textSecondary, fontSize: 12.5, height: 1.4),
                               ),
@@ -579,7 +672,7 @@ class _RemindersSection extends StatelessWidget {
                           onChanged: reminder.isExpired ? null : (value) => service.update(reminder.copyWith(enabled: value)),
                         ),
                         IconButton(
-                          tooltip: _t(en: 'Delete reminder', ar: 'حذف التذكير'),
+                          tooltip: appText(isArabic).deleteReminder,
                           icon: Icon(Icons.delete_outline_rounded, color: palette.textMuted),
                           onPressed: () => service.remove(reminder.id),
                         ),
@@ -587,6 +680,9 @@ class _RemindersSection extends StatelessWidget {
                     ),
                   ),
                 ),
+                  ],
+                ),
+              ),
           ],
         );
       },
@@ -609,8 +705,6 @@ class _AllergiesSection extends StatefulWidget {
 
 class _AllergiesSectionState extends State<_AllergiesSection> {
   final TextEditingController _controller = TextEditingController();
-
-  String _t({required String en, required String ar}) => widget.isArabic ? ar : en;
 
   static const List<(String, String)> _suggestions = [
     ('Penicillin', 'بنسلين'),
@@ -645,13 +739,33 @@ class _AllergiesSectionState extends State<_AllergiesSection> {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            _BodySection(key: ValueKey<String>('body-${profile.active.id}'), isArabic: widget.isArabic),
+            const SizedBox(height: 20),
+            SectionTitle(
+              icon: Icons.monitor_heart_outlined,
+              title: appText(widget.isArabic).healthConditions,
+              subtitle: appText(widget.isArabic).medicinePagesHighlightTheWarningsThat,
+            ),
+            const SizedBox(height: 12),
+            SurfaceCard(
+              child: Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  for (final condition in HealthCondition.values)
+                    FilterChip(
+                      label: Text(condition.label(isArabic: widget.isArabic)),
+                      selected: profile.conditions.contains(condition),
+                      onSelected: (_) => profile.toggleCondition(condition),
+                    ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 20),
             SectionTitle(
               icon: Icons.no_food_outlined,
-              title: _t(en: 'Allergies', ar: 'الحساسية'),
-              subtitle: _t(
-                en: 'Scanned prescriptions are checked against this list.',
-                ar: 'تُفحص الوصفات مقابل هذه اللائحة.',
-              ),
+              title: appText(widget.isArabic).allergies,
+              subtitle: appText(widget.isArabic).scannedPrescriptionsAreCheckedAgainstThis,
             ),
             const SizedBox(height: 12),
             SurfaceCard(
@@ -665,12 +779,23 @@ class _AllergiesSectionState extends State<_AllergiesSection> {
                       children: [
                         for (final allergy in allergies)
                           InputChip(
+                            avatar: MedicationSafetyService.isRecognizedAllergy(allergy, MophMedicineService().catalog)
+                                ? const Icon(Icons.check_circle_rounded, color: PharmaLensColors.success, size: 18)
+                                : const Icon(Icons.help_outline_rounded, color: PharmaLensColors.warning, size: 18),
                             label: Text(allergy),
                             onDeleted: () => profile.removeAllergy(allergy),
-                            deleteButtonTooltipMessage: _t(en: 'Remove', ar: 'إزالة'),
+                            deleteButtonTooltipMessage: appText(widget.isArabic).remove,
                           ),
                       ],
                     ),
+                    if (allergies.any((a) => !MedicationSafetyService.isRecognizedAllergy(a, MophMedicineService().catalog)))
+                      Padding(
+                        padding: const EdgeInsets.only(top: 8),
+                        child: Text(
+                          appText(widget.isArabic).entriesMarkedWereNotFoundIn,
+                          style: const TextStyle(color: PharmaLensColors.warning, fontSize: 12, height: 1.4, fontWeight: FontWeight.w700),
+                        ),
+                      ),
                     const SizedBox(height: 14),
                   ],
                   TextField(
@@ -678,10 +803,10 @@ class _AllergiesSectionState extends State<_AllergiesSection> {
                     textInputAction: TextInputAction.done,
                     onSubmitted: _add,
                     decoration: InputDecoration(
-                      hintText: _t(en: 'Medicine or ingredient, e.g. Amoxicillin', ar: 'دواء أو مادة فعالة، مثل Amoxicillin'),
+                      hintText: appText(widget.isArabic).medicineOrIngredientEGAmoxicillin,
                       prefixIcon: const Icon(Icons.add_circle_outline_rounded),
                       suffixIcon: IconButton(
-                        tooltip: _t(en: 'Add allergy', ar: 'إضافة حساسية'),
+                        tooltip: appText(widget.isArabic).addAllergy,
                         icon: const Icon(Icons.check_rounded),
                         onPressed: () => _add(_controller.text),
                       ),
@@ -702,10 +827,7 @@ class _AllergiesSectionState extends State<_AllergiesSection> {
                   ),
                   const SizedBox(height: 10),
                   Text(
-                    _t(
-                      en: 'This check uses MOPH ingredient and class data. It cannot catch every reaction; always tell your doctor and pharmacist about allergies.',
-                      ar: 'يعتمد هذا الفحص على بيانات المواد والفئات من وزارة الصحة. لا يكشف كل التفاعلات؛ أخبر طبيبك والصيدلي دائمًا بالحساسية.',
-                    ),
+                    appText(widget.isArabic).thisCheckUsesMophIngredientAnd,
                     style: TextStyle(color: palette.textMuted, fontSize: 11.5, height: 1.4),
                   ),
                 ],
@@ -716,6 +838,381 @@ class _AllergiesSectionState extends State<_AllergiesSection> {
       },
     );
   }
+}
+
+/// Chips for each person whose medicines are managed here, plus "Add".
+class _ProfileSwitcher extends StatelessWidget {
+  const _ProfileSwitcher({required this.isArabic});
+
+  final bool isArabic;
+
+  Future<void> _addPerson(BuildContext context) async {
+    final name = await showDialog<String>(
+      context: context,
+      builder: (_) => _NameDialog(isArabic: isArabic),
+    );
+    if (name != null && name.trim().isNotEmpty) await HealthProfileService().addProfile(name);
+  }
+
+  Future<void> _confirmRemove(BuildContext context, HealthProfile person) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(appText(isArabic).remove2(person.name)),
+        content: Text(
+          appText(isArabic).theirAllergiesAndConditionsAreRemoved,
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(dialogContext).pop(false), child: Text(appText(isArabic).cancel)),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: PharmaLensColors.danger),
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: Text(appText(isArabic).remove3),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true) await HealthProfileService().removeProfile(person.id);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final service = HealthProfileService();
+
+    return ListenableBuilder(
+      listenable: service,
+      builder: (context, _) {
+        final active = service.active;
+        return SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            children: [
+              for (final person in service.profiles)
+                Padding(
+                  padding: const EdgeInsetsDirectional.only(end: 8),
+                  child: GestureDetector(
+                    onLongPress: person.isOwner ? null : () => _confirmRemove(context, person),
+                    child: ChoiceChip(
+                      avatar: Icon(person.isOwner ? Icons.person_rounded : Icons.family_restroom_rounded, size: 18),
+                      label: Text(person.displayName(isArabic: isArabic)),
+                      selected: person.id == active.id,
+                      onSelected: (_) => service.setActive(person.id),
+                    ),
+                  ),
+                ),
+              ActionChip(
+                avatar: const Icon(Icons.person_add_alt_1_rounded, size: 18),
+                label: Text(appText(isArabic).familyMember),
+                onPressed: () => _addPerson(context),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// Asks for a family member's name. The dialog owns its text field: a
+/// controller disposed by the caller right after `showDialog` returns is
+/// still in use while the dialog fades out, which crashed the app.
+class _NameDialog extends StatefulWidget {
+  const _NameDialog({required this.isArabic});
+
+  final bool isArabic;
+
+  @override
+  State<_NameDialog> createState() => _NameDialogState();
+}
+
+class _NameDialogState extends State<_NameDialog> {
+  final TextEditingController _controller = TextEditingController();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    final name = _controller.text.trim();
+    if (name.isEmpty) return;
+    Navigator.of(context).pop(name);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final text = appText(widget.isArabic);
+    return AlertDialog(
+      title: Text(text.addAFamilyMember),
+      content: TextField(
+        controller: _controller,
+        autofocus: true,
+        textCapitalization: TextCapitalization.words,
+        textInputAction: TextInputAction.done,
+        decoration: InputDecoration(labelText: text.nameEGMom),
+        onChanged: (_) => setState(() {}),
+        onSubmitted: (_) => _submit(),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.of(context).pop(), child: Text(text.cancel)),
+        FilledButton(onPressed: _controller.text.trim().isEmpty ? null : _submit, child: Text(text.add)),
+      ],
+    );
+  }
+}
+
+/// Opens the tab asked for through [MyHealthScreen.requestedTab].
+class _TabRequests extends StatefulWidget {
+  const _TabRequests({required this.child});
+
+  final Widget child;
+
+  @override
+  State<_TabRequests> createState() => _TabRequestsState();
+}
+
+class _TabRequestsState extends State<_TabRequests> {
+  @override
+  void initState() {
+    super.initState();
+    MyHealthScreen.requestedTab.addListener(_open);
+    // Asked for before this page was first built.
+    WidgetsBinding.instance.addPostFrameCallback((_) => _open());
+  }
+
+  @override
+  void dispose() {
+    MyHealthScreen.requestedTab.removeListener(_open);
+    super.dispose();
+  }
+
+  void _open() {
+    final tab = MyHealthScreen.requestedTab.value;
+    if (tab == null || !mounted) return;
+    MyHealthScreen.requestedTab.value = null;
+    DefaultTabController.of(context).animateTo(tab);
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
+}
+
+/// Shows a long list a page at a time: the next page is added as the
+/// surrounding scroll view nears its end, and a button covers lists too
+/// short to scroll.
+class _Paged extends StatefulWidget {
+  const _Paged({super.key, required this.itemCount, required this.builder, required this.isArabic, this.pageSize = 10});
+
+  final int itemCount;
+  final int pageSize;
+  final bool isArabic;
+
+  /// Builds the first `shown` items.
+  final Widget Function(BuildContext context, int shown) builder;
+
+  @override
+  State<_Paged> createState() => _PagedState();
+}
+
+class _PagedState extends State<_Paged> {
+  late int _visible = widget.pageSize;
+  ScrollPosition? _position;
+
+  int get _shown => _visible < widget.itemCount ? _visible : widget.itemCount;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final position = Scrollable.maybeOf(context)?.position;
+    if (position == _position) return;
+    _position?.removeListener(_onScroll);
+    _position = position?..addListener(_onScroll);
+  }
+
+  @override
+  void dispose() {
+    _position?.removeListener(_onScroll);
+    super.dispose();
+  }
+
+  void _onScroll() {
+    final position = _position;
+    if (position == null || !position.hasContentDimensions) return;
+    if (_shown < widget.itemCount && position.pixels >= position.maxScrollExtent - 400) _more();
+  }
+
+  void _more() => setState(() => _visible += widget.pageSize);
+
+  @override
+  Widget build(BuildContext context) {
+    final left = widget.itemCount - _shown;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        widget.builder(context, _shown),
+        if (left > 0)
+          Center(
+            child: TextButton.icon(
+              onPressed: _more,
+              icon: const Icon(Icons.expand_more_rounded),
+              label: Text(appText(widget.isArabic).showMoreLeft(left)),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+/// Age, sex, height and weight, so medicine pages can point at label
+/// warnings that depend on them. Saved as the user types.
+class _BodySection extends StatefulWidget {
+  const _BodySection({super.key, required this.isArabic});
+
+  final bool isArabic;
+
+  @override
+  State<_BodySection> createState() => _BodySectionState();
+}
+
+class _BodySectionState extends State<_BodySection> {
+  final HealthProfileService _profile = HealthProfileService();
+  late final HealthProfile _person = _profile.active;
+  late final TextEditingController _age = TextEditingController(text: _person.age?.toString() ?? '');
+  late final TextEditingController _height = TextEditingController(text: _format(_person.heightCm));
+  late final TextEditingController _weight = TextEditingController(text: _format(_person.weightKg));
+  late BiologicalSex? _sex = _person.sex;
+  Timer? _save;
+
+  static String _format(double? value) {
+    if (value == null) return '';
+    return value == value.roundToDouble() ? value.round().toString() : value.toStringAsFixed(1);
+  }
+
+  static double? _number(String text) => double.tryParse(text.trim().replaceAll(',', '.'));
+
+  // Values outside these ranges are typing mistakes and are not saved.
+  int? get _ageValue {
+    final value = int.tryParse(_age.text.trim());
+    return value == null || value < 0 || value > 120 ? null : value;
+  }
+
+  double? get _heightValue {
+    final value = _number(_height.text);
+    return value == null || value < 40 || value > 250 ? null : value;
+  }
+
+  double? get _weightValue {
+    final value = _number(_weight.text);
+    return value == null || value < 2 || value > 350 ? null : value;
+  }
+
+  @override
+  void dispose() {
+    // Typed just before leaving the page.
+    if (_save?.isActive ?? false) {
+      _save!.cancel();
+      _persist();
+    }
+    _age.dispose();
+    _height.dispose();
+    _weight.dispose();
+    super.dispose();
+  }
+
+  void _changed() {
+    setState(() {});
+    _save?.cancel();
+    _save = Timer(const Duration(milliseconds: 700), _persist);
+  }
+
+  void _persist() {
+    unawaited(_profile.setBody(age: _ageValue, sex: _sex, heightCm: _heightValue, weightKg: _weightValue));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = PharmaLensTheme.paletteOf(context);
+    final text = appText(widget.isArabic);
+    final height = _heightValue, weight = _weightValue;
+    final bmi = height == null || weight == null ? null : weight / ((height / 100) * (height / 100));
+
+    Widget field(TextEditingController controller, String label, String suffix, {bool decimal = true}) {
+      return TextField(
+        controller: controller,
+        keyboardType: TextInputType.numberWithOptions(decimal: decimal),
+        textInputAction: TextInputAction.next,
+        onChanged: (_) => _changed(),
+        decoration: InputDecoration(labelText: label, suffixText: suffix, isDense: true),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SectionTitle(
+          icon: Icons.accessibility_new_rounded,
+          title: text.body,
+          subtitle: text.ageAndWeightHelpPharmalensPoint,
+        ),
+        const SizedBox(height: 12),
+        SurfaceCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  Expanded(child: field(_age, text.age, text.years, decimal: false)),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: SegmentedButton<BiologicalSex>(
+                      emptySelectionAllowed: true,
+                      showSelectedIcon: false,
+                      segments: [
+                        ButtonSegment(value: BiologicalSex.female, label: Text(text.female)),
+                        ButtonSegment(value: BiologicalSex.male, label: Text(text.male)),
+                      ],
+                      selected: <BiologicalSex>{if (_sex != null) _sex!},
+                      onSelectionChanged: (value) {
+                        _sex = value.isEmpty ? null : value.first;
+                        _changed();
+                      },
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(child: field(_height, text.height, 'cm')),
+                  const SizedBox(width: 10),
+                  Expanded(child: field(_weight, text.weight, 'kg')),
+                ],
+              ),
+              if (bmi != null) ...[
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Icon(Icons.speed_rounded, size: 18, color: _bmiColor(bmi)),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        text.bmiValue(bmi.toStringAsFixed(1), bmiCategory(bmi, isArabic: widget.isArabic)),
+                        style: TextStyle(color: palette.textPrimary, fontWeight: FontWeight.w800),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  static Color _bmiColor(double bmi) =>
+      bmi < 18.5 || bmi >= 30 ? PharmaLensColors.warning : bmi >= 25 ? PharmaLensColors.info : PharmaLensColors.success;
 }
 
 class _EmptyState extends StatelessWidget {

@@ -1,11 +1,11 @@
 {
-    "name": "pharmalens",
-    "short_name": "pharmalens",
+    "name": "PharmaLens",
+    "short_name": "PharmaLens",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#062B3A",
+    "theme_color": "#12A7A2",
+    "description": "Read prescriptions, check official Lebanese medicine prices and stay safe with your medicines.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

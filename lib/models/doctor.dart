@@ -1,3 +1,4 @@
+import '../l10n/app_text.dart';
 import '../utils/doctor_gender_resolver.dart';
 
 class Doctor {
@@ -492,9 +493,7 @@ class Doctor {
       return hospitals.join(' • ');
     }
 
-    return isArabic
-        ? 'عيادة خاصة'
-        : 'Private clinic';
+    return appText(isArabic).privateClinic;
   }
 
   String get displayAddress {
@@ -560,20 +559,14 @@ class Doctor {
     required bool isArabic,
   }) {
     if (gender == 'Female') {
-      return isArabic
-          ? 'أنثى'
-          : 'Female';
+      return appText(isArabic).female;
     }
 
     if (gender == 'Male') {
-      return isArabic
-          ? 'ذكر'
-          : 'Male';
+      return appText(isArabic).male;
     }
 
-    return isArabic
-        ? 'غير محدد'
-        : 'Not specified';
+    return appText(isArabic).notSpecified;
   }
 
   // ============================================================
@@ -610,20 +603,14 @@ class Doctor {
     required bool isArabic,
   }) {
     if (!hasWhatsapp) {
-      return isArabic
-          ? 'غير متوفر'
-          : 'Not available';
+      return appText(isArabic).notAvailable;
     }
 
     if (whatsappVerified) {
-      return isArabic
-          ? 'WhatsApp موثّق'
-          : 'WhatsApp verified';
+      return appText(isArabic).whatsappVerified;
     }
 
-    return isArabic
-        ? 'WhatsApp غير موثّق'
-        : 'WhatsApp unverified';
+    return appText(isArabic).whatsappUnverified;
   }
 
   // ============================================================

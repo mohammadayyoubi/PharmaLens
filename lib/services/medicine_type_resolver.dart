@@ -1,3 +1,4 @@
+import '../l10n/app_text.dart';
 import '../models/medicine_knowledge.dart';
 import '../models/medicine_price.dart';
 
@@ -25,19 +26,13 @@ class MedicineTypeInfo {
   String sourceLabel({required bool isArabic}) {
     switch (source) {
       case MedicineTypeSource.reviewedProfile:
-        return isArabic
-            ? 'من الملف الطبي المراجع'
-            : 'From the reviewed medicine profile';
+        return appText(isArabic).fromTheReviewedMedicineProfile;
 
       case MedicineTypeSource.atcClassification:
-        return isArabic
-            ? 'حسب تصنيف ATC الموجود في سجل الدواء'
-            : 'Based on the ATC code in the medicine record';
+        return appText(isArabic).basedOnTheAtcCodeIn;
 
       case MedicineTypeSource.activeIngredientClassification:
-        return isArabic
-            ? 'حسب المادة الفعالة المسجلة'
-            : 'Based on the registered active ingredient';
+        return appText(isArabic).basedOnTheRegisteredActiveIngredient;
     }
   }
 }

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../l10n/app_text.dart';
 import '../models/doctor.dart';
 import '../services/doctors_service.dart';
 import '../theme/pharmalens_theme.dart';
@@ -54,10 +55,6 @@ class _DoctorsScreenState extends State<DoctorsScreen> {
     return _searchController.text.trim().isNotEmpty ||
         _selectedGender.isNotEmpty ||
         _selectedSpecialty.isNotEmpty;
-  }
-
-  String _t({required String en, required String ar}) {
-    return _isArabic ? ar : en;
   }
 
   @override
@@ -117,10 +114,7 @@ class _DoctorsScreenState extends State<DoctorsScreen> {
       setState(() {
         _loading = false;
 
-        _error = _t(
-          en: 'Could not load the doctors directory.',
-          ar: 'تعذر تحميل دليل الأطباء.',
-        );
+        _error = appText(_isArabic).couldNotLoadTheDoctorsDirectory;
       });
     }
   }
@@ -146,10 +140,7 @@ class _DoctorsScreenState extends State<DoctorsScreen> {
       }
 
       setState(() {
-        _error = _t(
-          en: 'Could not refresh doctors.',
-          ar: 'تعذر تحديث الأطباء.',
-        );
+        _error = appText(_isArabic).couldNotRefreshDoctors;
       });
     }
   }
@@ -216,7 +207,7 @@ class _DoctorsScreenState extends State<DoctorsScreen> {
         _loading = false;
         _loadingMore = false;
 
-        _error = _t(en: 'Could not load doctors.', ar: 'تعذر تحميل الأطباء.');
+        _error = appText(_isArabic).couldNotLoadDoctors2;
       });
     }
   }
@@ -331,7 +322,7 @@ class _DoctorsScreenState extends State<DoctorsScreen> {
       ..showSnackBar(
         SnackBar(
           content: Text(
-            _t(en: 'Could not open this action.', ar: 'تعذر فتح هذا الخيار.'),
+            appText(_isArabic).couldNotOpenThisAction,
           ),
         ),
       );
@@ -613,15 +604,12 @@ class _DoctorsScreenState extends State<DoctorsScreen> {
             _loadDoctors(reset: true);
           },
           decoration: InputDecoration(
-            hintText: _t(
-              en: 'Search doctor, specialty or hospital',
-              ar: 'ابحث عن طبيب أو اختصاص أو مستشفى',
-            ),
+            hintText: appText(_isArabic).searchDoctorSpecialtyOrHospital,
             prefixIcon: const Icon(Icons.search_rounded),
             suffixIcon: _searchController.text.trim().isEmpty
                 ? null
                 : IconButton(
-                    tooltip: _t(en: 'Clear search', ar: 'مسح البحث'),
+                    tooltip: appText(_isArabic).clearSearch,
                     onPressed: () {
                       _searchController.clear();
 
@@ -636,7 +624,7 @@ class _DoctorsScreenState extends State<DoctorsScreen> {
 
         _SpecialtyButton(
           value: _selectedSpecialty.isEmpty
-              ? _t(en: 'All specialties', ar: 'كل الاختصاصات')
+              ? appText(_isArabic).allSpecialties
               : _specialtyLabel(_selectedSpecialty),
           active: _selectedSpecialty.isNotEmpty,
           isArabic: _isArabic,
@@ -646,7 +634,7 @@ class _DoctorsScreenState extends State<DoctorsScreen> {
         const SizedBox(height: 12),
 
         Text(
-          _t(en: 'Doctor gender', ar: 'جنس الطبيب'),
+          appText(_isArabic).doctorGender,
           style: TextStyle(
             color: palette.textSecondary,
             fontSize: 12,
@@ -661,7 +649,7 @@ class _DoctorsScreenState extends State<DoctorsScreen> {
             Expanded(
               child: _GenderButton(
                 icon: Icons.groups_rounded,
-                label: _t(en: 'Any', ar: 'الكل'),
+                label: appText(_isArabic).any,
                 selected: _selectedGender.isEmpty,
                 onTap: () {
                   _setGender('');
@@ -672,7 +660,7 @@ class _DoctorsScreenState extends State<DoctorsScreen> {
             Expanded(
               child: _GenderButton(
                 icon: Icons.female_rounded,
-                label: _t(en: 'Female', ar: 'طبيبة'),
+                label: appText(_isArabic).female2,
                 selected: _selectedGender == 'Female',
                 onTap: () {
                   _setGender('Female');
@@ -683,7 +671,7 @@ class _DoctorsScreenState extends State<DoctorsScreen> {
             Expanded(
               child: _GenderButton(
                 icon: Icons.male_rounded,
-                label: _t(en: 'Male', ar: 'طبيب'),
+                label: appText(_isArabic).male2,
                 selected: _selectedGender == 'Male',
                 onTap: () {
                   _setGender('Male');
@@ -696,10 +684,7 @@ class _DoctorsScreenState extends State<DoctorsScreen> {
         if (_selectedGender.isNotEmpty) ...<Widget>[
           const SizedBox(height: 8),
           Text(
-            _t(
-              en: 'The official list has no gender field, so it is estimated from the first name. About 1 in 10 doctors cannot be estimated and only appear under "Any".',
-              ar: 'لا تتضمن اللائحة الرسمية الجنس، لذا يُقدَّر من الاسم الأول. حوالي طبيب من كل 10 لا يمكن تقديره ويظهر فقط ضمن "الكل".',
-            ),
+            appText(_isArabic).theOfficialListHasNoGender,
             style: TextStyle(color: palette.textMuted, fontSize: 11.5, height: 1.4),
           ),
         ],
@@ -711,7 +696,7 @@ class _DoctorsScreenState extends State<DoctorsScreen> {
             child: TextButton.icon(
               onPressed: _clearFilters,
               icon: const Icon(Icons.clear_all_rounded, size: 18),
-              label: Text(_t(en: 'Clear filters', ar: 'مسح الفلاتر')),
+              label: Text(appText(_isArabic).clearFilters),
             ),
           ),
         ],
@@ -729,14 +714,8 @@ class _DoctorsScreenState extends State<DoctorsScreen> {
     final moreLabel = _hasMore ? '+' : '';
 
     final text = _hasFilters
-        ? _t(
-            en: '${_doctors.length}$moreLabel matching doctors',
-            ar: '${_doctors.length}$moreLabel طبيب/ة مطابقون',
-          )
-        : _t(
-            en: 'Showing ${_doctors.length}$moreLabel of ${formatCount(_metadata.totalDoctors)}',
-            ar: 'عرض ${_doctors.length}$moreLabel من أصل ${formatCount(_metadata.totalDoctors)}',
-          );
+        ? appText(_isArabic).matchingDoctors(_doctors.length, moreLabel)
+        : appText(_isArabic).showingOf(_doctors.length, moreLabel, formatCount(_metadata.totalDoctors));
 
     return Padding(
       padding: EdgeInsets.fromLTRB(gutter, 14, gutter, 6),
@@ -782,9 +761,9 @@ class _DoctorsScreenState extends State<DoctorsScreen> {
           hasScrollBody: false,
           child: _EmptyState(
             icon: Icons.error_outline_rounded,
-            title: _t(en: 'Could not load doctors', ar: 'تعذر تحميل الأطباء'),
+            title: appText(_isArabic).couldNotLoadDoctors,
             subtitle: _error,
-            buttonLabel: _t(en: 'Try again', ar: 'إعادة المحاولة'),
+            buttonLabel: appText(_isArabic).tryAgain,
             onPressed: _refresh,
           ),
         ),
@@ -797,12 +776,9 @@ class _DoctorsScreenState extends State<DoctorsScreen> {
           hasScrollBody: false,
           child: _EmptyState(
             icon: Icons.search_off_rounded,
-            title: _t(en: 'No matching doctors', ar: 'لا يوجد أطباء مطابقون'),
-            subtitle: _t(
-              en: 'Try another name, specialty or hospital.',
-              ar: 'جرّب اسمًا أو اختصاصًا أو مستشفى مختلفًا.',
-            ),
-            buttonLabel: _t(en: 'Clear filters', ar: 'مسح الفلاتر'),
+            title: appText(_isArabic).noMatchingDoctors,
+            subtitle: appText(_isArabic).tryAnotherNameSpecialtyOrHospital,
+            buttonLabel: appText(_isArabic).clearFilters,
             onPressed: _clearFilters,
           ),
         ),
@@ -885,7 +861,7 @@ class _DirectoryHeader extends StatelessWidget {
         Semantics(
           header: true,
           child: Text(
-            isArabic ? 'دليل الأطباء' : 'Doctors',
+            appText(isArabic).doctors2,
             style: TextStyle(
               color: palette.textPrimary,
               fontSize: 26,
@@ -895,9 +871,7 @@ class _DirectoryHeader extends StatelessWidget {
         ),
         const SizedBox(height: 2),
         Text(
-          isArabic
-              ? '${formatCount(total)} طبيب مسجل في نقابة الأطباء في لبنان'
-              : '${formatCount(total)} doctors registered with the Lebanese Order of Physicians',
+          appText(isArabic).doctorsRegisteredWithTheLebaneseOrder(formatCount(total)),
           style: TextStyle(
             color: palette.textSecondary,
             fontSize: 12.5,
@@ -1014,7 +988,7 @@ class _SpecialtyButton extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
                     Text(
-                      isArabic ? 'الاختصاص' : 'Specialty',
+                      appText(isArabic).specialty,
                       style: TextStyle(color: palette.textMuted, fontSize: 10),
                     ),
                     const SizedBox(height: 3),
@@ -1069,7 +1043,7 @@ class _DoctorCard extends StatelessWidget {
     final specialty = doctor.localizedSpecialty(isArabic: isArabic);
 
     final accent = doctor.isFemale
-        ? const Color(0xFFD95A91)
+        ? PharmaLensColors.accentPink
         : PharmaLensColors.teal;
 
     return Material(
@@ -1202,7 +1176,7 @@ class _DoctorCard extends StatelessWidget {
                       Expanded(
                         child: _DoctorAction(
                           icon: Icons.call_rounded,
-                          label: isArabic ? 'اتصال' : 'Call',
+                          label: appText(isArabic).call,
                           onTap: onCall!,
                         ),
                       ),
@@ -1300,10 +1274,6 @@ class _DoctorProfileSheet extends StatelessWidget {
   final VoidCallback? onDirections;
   final VoidCallback? onSource;
 
-  String _t({required String en, required String ar}) {
-    return isArabic ? ar : en;
-  }
-
   @override
   Widget build(BuildContext context) {
     final name = doctor.localizedName(isArabic: isArabic);
@@ -1352,7 +1322,7 @@ class _DoctorProfileSheet extends StatelessWidget {
                   const SizedBox(height: 8),
                   Text(
                     doctor.genderEstimated
-                        ? '${doctor.localizedGender(isArabic: isArabic)} · ${_t(en: 'estimated from name', ar: 'مقدّر من الاسم')}'
+                        ? '${doctor.localizedGender(isArabic: isArabic)} · ${appText(isArabic).estimatedFromName}'
                         : doctor.localizedGender(isArabic: isArabic),
                     style: TextStyle(
                       color: Colors.white.withValues(alpha: 0.62),
@@ -1382,7 +1352,7 @@ class _DoctorProfileSheet extends StatelessWidget {
               if (onCall != null)
                 _ProfileAction(
                   icon: Icons.call_rounded,
-                  label: _t(en: 'Call', ar: 'اتصال'),
+                  label: appText(isArabic).call,
                   onTap: onCall!,
                 ),
               if (onWhatsapp != null)
@@ -1394,13 +1364,13 @@ class _DoctorProfileSheet extends StatelessWidget {
               if (onEmail != null)
                 _ProfileAction(
                   icon: Icons.email_outlined,
-                  label: _t(en: 'Email', ar: 'البريد'),
+                  label: appText(isArabic).email2,
                   onTap: onEmail!,
                 ),
               if (onDirections != null)
                 _ProfileAction(
                   icon: Icons.directions_outlined,
-                  label: _t(en: 'Directions', ar: 'الطريق'),
+                  label: appText(isArabic).directions2,
                   onTap: onDirections!,
                 ),
             ],
@@ -1409,22 +1379,22 @@ class _DoctorProfileSheet extends StatelessWidget {
           const SizedBox(height: 12),
 
           _InformationCard(
-            title: _t(en: 'Professional information', ar: 'المعلومات المهنية'),
+            title: appText(isArabic).professionalInformation,
             items: <_InfoItem>[
               _InfoItem(
-                label: _t(en: 'Specialty', ar: 'الاختصاص'),
+                label: appText(isArabic).specialty,
                 value: doctor.localizedSpecialty(isArabic: isArabic),
               ),
               _InfoItem(
-                label: _t(en: 'Subspecialty', ar: 'الاختصاص الفرعي'),
+                label: appText(isArabic).subspecialty,
                 value: doctor.subspecialty,
               ),
               _InfoItem(
-                label: _t(en: 'Hospital / Clinic', ar: 'المستشفى / العيادة'),
+                label: appText(isArabic).hospitalClinic,
                 value: doctor.facilityLabel(isArabic: isArabic),
               ),
               _InfoItem(
-                label: _t(en: 'Location', ar: 'الموقع'),
+                label: appText(isArabic).location,
                 value: doctor.displayLocation,
               ),
             ],
@@ -1433,15 +1403,15 @@ class _DoctorProfileSheet extends StatelessWidget {
           const SizedBox(height: 12),
 
           _InformationCard(
-            title: _t(en: 'Contact', ar: 'التواصل'),
+            title: appText(isArabic).contact,
             items: <_InfoItem>[
               _InfoItem(
-                label: _t(en: 'Phone', ar: 'الهاتف'),
+                label: appText(isArabic).phone,
                 value: doctor.phone,
               ),
               _InfoItem(label: 'WhatsApp', value: doctor.whatsapp),
               _InfoItem(
-                label: _t(en: 'Email', ar: 'البريد'),
+                label: appText(isArabic).email2,
                 value: doctor.email,
               ),
             ],
@@ -1450,14 +1420,14 @@ class _DoctorProfileSheet extends StatelessWidget {
           const SizedBox(height: 12),
 
           _InformationCard(
-            title: _t(en: 'Data source', ar: 'مصدر البيانات'),
+            title: appText(isArabic).dataSource,
             items: <_InfoItem>[
               _InfoItem(
-                label: _t(en: 'Source', ar: 'المصدر'),
+                label: appText(isArabic).source,
                 value: doctor.displaySource,
               ),
               _InfoItem(
-                label: _t(en: 'Doctor ID', ar: 'رقم الطبيب'),
+                label: appText(isArabic).doctorId,
                 value: doctor.doctorCode,
               ),
             ],
@@ -1466,17 +1436,14 @@ class _DoctorProfileSheet extends StatelessWidget {
                 : TextButton.icon(
                     onPressed: onSource,
                     icon: const Icon(Icons.open_in_new_rounded),
-                    label: Text(_t(en: 'Open source', ar: 'فتح المصدر')),
+                    label: Text(appText(isArabic).openSource),
                   ),
           ),
 
           const SizedBox(height: 12),
 
           Text(
-            _t(
-              en: 'The Order of Physicians list does not publish doctors\' phone numbers or clinic addresses. Hospital contacts come from Google Maps and can change; confirm before visiting.',
-              ar: 'لا تنشر لائحة نقابة الأطباء أرقام هواتف الأطباء أو عناوين العيادات. معلومات المستشفيات من خرائط Google وقد تتغير؛ تأكد قبل الزيارة.',
-            ),
+            appText(isArabic).theOrderOfPhysiciansListDoes,
             textAlign: TextAlign.center,
             style: TextStyle(
               color: PharmaLensTheme.paletteOf(context).textMuted,
@@ -1654,7 +1621,7 @@ class _SpecialtyPickerSheetState extends State<_SpecialtyPickerSheet> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
                 Text(
-                  widget.isArabic ? 'اختيار الاختصاص' : 'Select specialty',
+                  appText(widget.isArabic).selectSpecialty,
                   style: const TextStyle(
                     fontSize: 20,
                     fontWeight: FontWeight.w900,
@@ -1669,9 +1636,7 @@ class _SpecialtyPickerSheetState extends State<_SpecialtyPickerSheet> {
                     });
                   },
                   decoration: InputDecoration(
-                    hintText: widget.isArabic
-                        ? 'ابحث عن اختصاص'
-                        : 'Search specialty',
+                    hintText: appText(widget.isArabic).searchSpecialty,
                     prefixIcon: const Icon(Icons.search_rounded),
                   ),
                 ),
@@ -1684,7 +1649,7 @@ class _SpecialtyPickerSheetState extends State<_SpecialtyPickerSheet> {
               padding: const EdgeInsets.all(12),
               children: <Widget>[
                 _SpecialtyTile(
-                  title: widget.isArabic ? 'كل الاختصاصات' : 'All specialties',
+                  title: appText(widget.isArabic).allSpecialties,
                   count: 0,
                   selected: widget.selected.isEmpty,
                   onTap: () {
@@ -1796,7 +1761,7 @@ class _PaginationFooter extends StatelessWidget {
         padding: const EdgeInsets.all(18),
         child: Center(
           child: Text(
-            isArabic ? 'نهاية النتائج' : 'End of results',
+            appText(isArabic).endOfResults,
             style: TextStyle(color: palette.textMuted),
           ),
         ),
@@ -1809,7 +1774,7 @@ class _PaginationFooter extends StatelessWidget {
         child: OutlinedButton.icon(
           onPressed: onLoad,
           icon: const Icon(Icons.expand_more_rounded),
-          label: Text(isArabic ? 'تحميل المزيد' : 'Load more'),
+          label: Text(appText(isArabic).loadMore),
         ),
       ),
     );
@@ -1881,8 +1846,6 @@ class _ContactSection extends StatelessWidget {
   final Future<void> Function(String phone) onCallNumber;
   final Future<void> Function(Uri uri) onOpenUri;
 
-  String _t({required String en, required String ar}) => isArabic ? ar : en;
-
   Uri _mapsSearch(String query) {
     return Uri.https('www.google.com', '/maps/search/', <String, String>{
       'api': '1',
@@ -1902,7 +1865,7 @@ class _ContactSection extends StatelessWidget {
       children.add(
         _ContactRow(
           icon: Icons.person_pin_circle_outlined,
-          title: _t(en: 'Doctor', ar: 'الطبيب'),
+          title: appText(isArabic).doctor,
           subtitle: [doctor.phone, doctor.displayAddress].where((v) => v.trim().isNotEmpty).join('\n'),
           onCall: doctor.hasPhone ? () => onCallNumber(doctor.phone) : null,
           onMap: doctor.hasCoordinates
@@ -1925,9 +1888,9 @@ class _ContactSection extends StatelessWidget {
               icon: Icons.local_hospital_outlined,
               title: hospital,
               subtitle: loading
-                  ? _t(en: 'Looking up hospital contact...', ar: 'جارٍ البحث عن معلومات المستشفى...')
+                  ? appText(isArabic).lookingUpHospitalContact
                   : contact == null
-                      ? _t(en: 'Contact not found. Search it on the map.', ar: 'لم يتم العثور على المعلومات. ابحث على الخريطة.')
+                      ? appText(isArabic).contactNotFoundSearchItOn
                       : [contact.phone, contact.address].where((v) => v.isNotEmpty).join('\n'),
               loading: loading,
               onCall: contact != null && contact.hasPhone ? () => onCallNumber(contact.phone) : null,
@@ -1948,11 +1911,8 @@ class _ContactSection extends StatelessWidget {
       children.add(
         _ContactRow(
           icon: Icons.storefront_outlined,
-          title: _t(en: 'Private clinic', ar: 'عيادة خاصة'),
-          subtitle: _t(
-            en: 'The clinic address is not in the official list. You can search for it:',
-            ar: 'عنوان العيادة غير موجود في اللائحة الرسمية. يمكنك البحث عنه:',
-          ),
+          title: appText(isArabic).privateClinic,
+          subtitle: appText(isArabic).theClinicAddressIsNotIn,
           onMap: () => onOpenUri(_mapsSearch(query)),
           onWeb: () => onOpenUri(Uri.https('www.google.com', '/search', <String, String>{'q': query})),
           isArabic: isArabic,
@@ -1973,7 +1933,7 @@ class _ContactSection extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
           Text(
-            _t(en: 'Contact & location', ar: 'التواصل والموقع'),
+            appText(isArabic).contactLocation,
             style: TextStyle(color: palette.textPrimary, fontSize: 15, fontWeight: FontWeight.w900),
           ),
           const SizedBox(height: 8),
@@ -1984,10 +1944,7 @@ class _ContactSection extends StatelessWidget {
           if (!service.isConfigured && hospitals.isNotEmpty) ...[
             const SizedBox(height: 8),
             Text(
-              _t(
-                en: 'Hospital phone lookup needs a Google Places key in the app configuration.',
-                ar: 'البحث عن هاتف المستشفى يحتاج إلى مفتاح Google Places في إعدادات التطبيق.',
-              ),
+              appText(isArabic).hospitalPhoneLookupNeedsAGoogle,
               style: TextStyle(color: palette.textMuted, fontSize: 11),
             ),
           ],
@@ -2053,11 +2010,11 @@ class _ContactRow extends StatelessWidget {
             runSpacing: 8,
             children: <Widget>[
               if (onCall != null)
-                _ProfileAction(icon: Icons.call_rounded, label: isArabic ? 'اتصال' : 'Call', onTap: onCall!),
+                _ProfileAction(icon: Icons.call_rounded, label: appText(isArabic).call, onTap: onCall!),
               if (onMap != null)
-                _ProfileAction(icon: Icons.map_outlined, label: isArabic ? 'الخريطة' : 'Map', onTap: onMap!),
+                _ProfileAction(icon: Icons.map_outlined, label: appText(isArabic).map, onTap: onMap!),
               if (onWeb != null)
-                _ProfileAction(icon: Icons.travel_explore_rounded, label: isArabic ? 'بحث' : 'Search web', onTap: onWeb!),
+                _ProfileAction(icon: Icons.travel_explore_rounded, label: appText(isArabic).searchWeb, onTap: onWeb!),
             ],
           ),
         ],

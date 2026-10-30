@@ -1,4 +1,5 @@
 import 'dart:convert';
+import '../l10n/app_text.dart';
 
 enum MedicineFoodInstruction {
   unknown,
@@ -78,28 +79,22 @@ enum MedicineFoodInstruction {
         return '';
 
       case MedicineFoodInstruction.beforeFood:
-        return isArabic ? 'يؤخذ قبل الطعام' : 'Take before food';
+        return appText(isArabic).takeBeforeFood;
 
       case MedicineFoodInstruction.afterFood:
-        return isArabic ? 'يؤخذ بعد الطعام' : 'Take after food';
+        return appText(isArabic).takeAfterFood;
 
       case MedicineFoodInstruction.withFood:
-        return isArabic ? 'يؤخذ مع الطعام' : 'Take with food';
+        return appText(isArabic).takeWithFood;
 
       case MedicineFoodInstruction.emptyStomach:
-        return isArabic
-            ? 'يؤخذ على معدة فارغة'
-            : 'Take on an empty stomach';
+        return appText(isArabic).takeOnAnEmptyStomach;
 
       case MedicineFoodInstruction.withOrWithoutFood:
-        return isArabic
-            ? 'يمكن تناوله مع الطعام أو بدونه'
-            : 'May be taken with or without food';
+        return appText(isArabic).mayBeTakenWithOrWithout;
 
       case MedicineFoodInstruction.avoidSpecificFood:
-        return isArabic
-            ? 'توجد أطعمة أو مشروبات يجب تجنبها'
-            : 'Specific foods or drinks must be avoided';
+        return appText(isArabic).specificFoodsOrDrinksMustBe;
     }
   }
 }

@@ -253,3 +253,68 @@ class AdaptiveBackButton extends StatelessWidget {
     return BackButton(onPressed: onPressed);
   }
 }
+
+/// Shrinks its child slightly while pressed, for cards and tiles that act
+/// as buttons.
+class PressableScale extends StatefulWidget {
+  const PressableScale({super.key, required this.child, this.enabled = true});
+
+  final Widget child;
+  final bool enabled;
+
+  @override
+  State<PressableScale> createState() => _PressableScaleState();
+}
+
+class _PressableScaleState extends State<PressableScale> {
+  bool _down = false;
+
+  void _set(bool value) {
+    if (widget.enabled && _down != value) setState(() => _down = value);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Listener(
+      onPointerDown: (_) => _set(true),
+      onPointerUp: (_) => _set(false),
+      onPointerCancel: (_) => _set(false),
+      child: AnimatedScale(
+        scale: _down ? 0.97 : 1,
+        duration: const Duration(milliseconds: 120),
+        curve: Curves.easeOut,
+        child: widget.child,
+      ),
+    );
+  }
+}
+
+/// Fades and slides its child in once, [delay] after it is first built, for
+/// a staggered page entrance. Honors the system "reduce motion" setting.
+class FadeSlideIn extends StatelessWidget {
+  const FadeSlideIn({super.key, required this.child, this.delay = Duration.zero});
+
+  final Widget child;
+  final Duration delay;
+
+  @override
+  Widget build(BuildContext context) {
+    if (MediaQuery.of(context).disableAnimations) return child;
+
+    final total = const Duration(milliseconds: 420) + delay;
+    final start = delay.inMilliseconds / total.inMilliseconds;
+
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0, end: 1),
+      duration: total,
+      builder: (context, value, child) {
+        final t = Curves.easeOutCubic.transform(((value - start) / (1 - start)).clamp(0.0, 1.0));
+        return Opacity(
+          opacity: t,
+          child: Transform.translate(offset: Offset(0, 14 * (1 - t)), child: child),
+        );
+      },
+      child: child,
+    );
+  }
+}

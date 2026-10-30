@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../l10n/app_localizations.dart';
+import '../l10n/app_text.dart';
 import '../localization/localization_extension.dart';
 import '../models/ai_handwriting_result.dart';
 import '../models/doctor_context.dart';
@@ -14,11 +15,13 @@ import '../services/ai_handwriting_service.dart';
 import '../services/health_profile_service.dart';
 import '../services/medication_safety_service.dart';
 import '../services/medicine_verification_service.dart';
+import '../services/moph_medicine_service.dart';
 import '../services/ocr_service.dart';
 import '../services/prescription_history_service.dart';
 import '../services/specialty_context_service.dart';
 import '../theme/pharmalens_theme.dart';
 import '../widgets/chatbot_view.dart';
+import '../widgets/label_interactions_card.dart';
 import '../widgets/reminder_editor.dart';
 import '../widgets/responsive.dart';
 import '../widgets/safety_alert_card.dart';
@@ -651,6 +654,101 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
     );
   }
 
+  /// Set when the quick picker's "Search all medicines" was chosen.
+  bool _searchAllRequested =
+  false;
+
+  Future<MedicinePrice?> _pickVariant(
+      List<MedicinePrice> variants,
+      String query,
+      ) {
+    final isArabic =
+        AppLocalizations.of(context).isArabic;
+
+    return showModalBottomSheet<MedicinePrice>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (sheetContext) {
+        final palette =
+        PharmaLensTheme.paletteOf(
+          sheetContext,
+        );
+
+        return ConstrainedBox(
+          constraints: BoxConstraints(
+            maxHeight:
+            MediaQuery.sizeOf(sheetContext).height * 0.8,
+          ),
+          child: ListView(
+            shrinkWrap: true,
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+            children: [
+              Text(
+                appText(isArabic).pickTheProductOnThePrescription,
+                style: TextStyle(
+                  color: palette.textPrimary,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                appText(isArabic).compareTheStrengthAndFormWith,
+                style: TextStyle(
+                  color: palette.textSecondary,
+                  fontSize: 12.5,
+                ),
+              ),
+              const SizedBox(height: 12),
+              for (final medicine in variants)
+                Card(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  child: ListTile(
+                    onTap: () => Navigator.of(sheetContext).pop(medicine),
+                    title: Text(
+                      medicine.brandName,
+                      style: const TextStyle(fontWeight: FontWeight.w900),
+                    ),
+                    subtitle: Text(
+                      <String>[
+                        medicine.strength ?? '',
+                        medicine.dosageForm ?? '',
+                        if ((medicine.packSize ?? '').isNotEmpty) isArabic ? 'عبوة ${medicine.packSize}' : 'pack ${medicine.packSize}',
+                      ].where((s) => s.isNotEmpty).join(' · '),
+                    ),
+                    trailing: medicine.priceLbp == null
+                        ? null
+                        : Text(
+                      '${medicine.formattedPriceLbp}\nLBP',
+                      textAlign: TextAlign.end,
+                      style: const TextStyle(
+                        color: PharmaLensColors.teal,
+                        fontWeight: FontWeight.w900,
+                        fontSize: 12.5,
+                      ),
+                    ),
+                  ),
+                ),
+              TextButton.icon(
+                onPressed: () {
+                  _searchAllRequested =
+                  true;
+                  Navigator.of(sheetContext).pop();
+                },
+                icon: const Icon(Icons.search_rounded),
+                label: Text(
+                  appText(isArabic).searchAllMedicines,
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   Future<void> _selectExactProduct(
       _PrescriptionEntry entry,
       ) async {
@@ -677,17 +775,48 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
       return;
     }
 
-    final selected =
-    await Navigator.of(context)
-        .push<MedicinePrice>(
-      MaterialPageRoute<MedicinePrice>(
-        builder: (_) =>
-            MedicineSearchScreen(
-              initialQuery: query,
-              selectionMode: true,
-            ),
-      ),
+    // The closest products first, one tap each; full search as a fallback.
+    final variants =
+    await MophMedicineService()
+        .searchMedicines(
+      query,
+      limit: 8,
     );
+
+    if (!mounted) {
+      return;
+    }
+
+    var selected =
+    variants.isEmpty
+        ? null
+        : await _pickVariant(
+      variants,
+      query,
+    );
+
+    if (!mounted) {
+      return;
+    }
+
+    if (selected == null &&
+        (variants.isEmpty ||
+            _searchAllRequested)) {
+      _searchAllRequested =
+      false;
+
+      selected =
+      await Navigator.of(context)
+          .push<MedicinePrice>(
+        MaterialPageRoute<MedicinePrice>(
+          builder: (_) =>
+              MedicineSearchScreen(
+                initialQuery: query,
+                selectionMode: true,
+              ),
+        ),
+      );
+    }
 
     if (!mounted ||
         selected == null) {
@@ -788,6 +917,21 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
         .toList();
   }
 
+  /// Best candidates for lines that could not be confirmed. Allergy checks
+  /// still run on them, worded as "if this line is ...".
+  List<MedicinePrice> _possibleProducts() {
+    return _entries()
+        .where(
+          (entry) =>
+      !_isConfirmed(entry.verification) &&
+          entry.verification?.candidate != null,
+    )
+        .map(
+          (entry) => entry.verification!.candidate!,
+    )
+        .toList();
+  }
+
   String _instructionsFor(
       AiMedicineSuggestion suggestion,
       ) {
@@ -877,6 +1021,7 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
             doctorName: _doctorContext.detectedDoctorName,
             specialty: _doctorContext.detectedSpecialty,
             imageBytes: widget.imageBytes,
+            profileId: HealthProfileService().active.id,
           );
 
           _historyRecordId = record.id;
@@ -1256,9 +1401,13 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
             const MedicationSafetyService().check(
               _confirmedProducts(),
               allergies: HealthProfileService().allergies,
+              possible: _possibleProducts(),
+              catalog: MophMedicineService().catalog,
             );
 
-            if (alerts.isEmpty) {
+            final confirmed = _confirmedProducts();
+
+            if (alerts.isEmpty && confirmed.length < 2) {
               return const SizedBox.shrink();
             }
 
@@ -1268,6 +1417,16 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
               ),
               child: Column(
                 children: [
+                  if (confirmed.length >= 2)
+                    Padding(
+                      padding: const EdgeInsets.only(
+                        bottom: 10,
+                      ),
+                      child: LabelInteractionsCard(
+                        products: confirmed,
+                        isArabic: tr.isArabic,
+                      ),
+                    ),
                   for (final alert in alerts)
                     Padding(
                       padding: const EdgeInsets.only(
@@ -1960,9 +2119,7 @@ class _PrescriptionResultHero
               CrossAxisAlignment.start,
               children: [
                 Text(
-                  isArabic
-                      ? '$count أدوية'
-                      : '$count medicines found',
+                  appText(isArabic).medicinesFound(count),
                   style:
                   const TextStyle(
                     color: Colors.white,
@@ -1975,9 +2132,7 @@ class _PrescriptionResultHero
                   height: 5,
                 ),
                 Text(
-                  isArabic
-                      ? "اضغط على أي دواء لعرض معلوماته."
-                      : 'Tap any medicine to open its information.',
+                  appText(isArabic).tapAnyMedicineToOpenIts,
                   style: TextStyle(
                     color:
                     Colors.white
@@ -2210,9 +2365,7 @@ class _PrescriptionMedicineTile
               if (onRemind != null &&
                   !isVerifying)
                 IconButton(
-                  tooltip: isArabic
-                      ? 'تذكير'
-                      : 'Remind me',
+                  tooltip: appText(isArabic).remindMe,
                   onPressed: onRemind,
                   icon: const Icon(
                     Icons.alarm_add_rounded,
@@ -2371,9 +2524,7 @@ class _EmptyResult
             height: 9,
           ),
           Text(
-            isArabic
-                ? "لم يتم العثور على أدوية مقروءة بأمان."
-                : 'No medicines were identified safely.',
+            appText(isArabic).noMedicinesWereIdentifiedSafely,
             textAlign:
             TextAlign.center,
             style: TextStyle(
@@ -2463,12 +2614,12 @@ class _PrescriptionImagePanel extends StatelessWidget {
               children: [
                 Expanded(
                   child: Text(
-                    isArabic ? 'صورة الوصفة' : 'Prescription photo',
+                    appText(isArabic).prescriptionPhoto,
                     style: TextStyle(color: palette.textPrimary, fontWeight: FontWeight.w900),
                   ),
                 ),
                 IconButton(
-                  tooltip: isArabic ? 'تكبير' : 'Enlarge',
+                  tooltip: appText(isArabic).enlarge,
                   onPressed: onExpand,
                   icon: const Icon(Icons.open_in_full_rounded),
                 ),
@@ -2478,7 +2629,7 @@ class _PrescriptionImagePanel extends StatelessWidget {
           Expanded(
             child: Semantics(
               image: true,
-              label: isArabic ? 'صورة الوصفة الطبية' : 'Prescription photo',
+              label: appText(isArabic).prescriptionPhoto2,
               child: InteractiveViewer(
                 maxScale: 5,
                 child: Image.memory(

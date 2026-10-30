@@ -42,8 +42,11 @@ COLUMNS = [
     "medicine_id", "registration_number", "brand_name", "generic_name",
     "active_ingredients", "atc_code", "brand_generic", "strength", "form",
     "pack", "company", "agent", "country", "official_price_lbp", "currency",
-    "last_updated", "source", "source_url", "notes",
+    "last_updated",
 ]
+# "source", "source_url" and "notes" were dropped in 2026-10: they were the
+# same on every row (or repeated other columns) and made up two thirds of the
+# file every phone downloads. The app links to PRICE_LIST_URL itself.
 
 
 def norm(value):
@@ -202,13 +205,6 @@ def main():
             "official_price_lbp": price if price is not None else "",
             "currency": "LBP",
             "last_updated": updated,
-            "source": "MOPH Lebanon - Drugs Public Price List",
-            "source_url": PRICE_LIST_URL,
-            "notes": (
-                f"Code: {get('Code')} | Registration: {get('Registration number')} | Agent: {get('Agent')} | "
-                f"Manufacturer: {get('Manufacturer')} | Country: {get('Country')} | Pharmacist margin: {get('Pharmacist Margin')}"
-                + (f" | Ingredients source: {LNDI_URL}" if match else "")
-            ),
         })
 
     dates = [row["last_updated"] for row in output_rows if row["last_updated"]]
