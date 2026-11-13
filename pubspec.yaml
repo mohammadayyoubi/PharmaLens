@@ -2,7 +2,7 @@ name: pharmalens
 description: "Smart prescription reading and medicine safety assistant."
 publish_to: "none"
 
-version: 1.1.0+2
+version: 1.2.0+3
 
 environment:
   sdk: '>=3.0.0 <4.0.0'
@@ -54,6 +54,8 @@ flutter:
     - assets/medicines/lebanon_medicine_prices.json
     - assets/doctors/lebanon_doctors.csv
     - assets/chatbot/knowledge_notes.md
+    - assets/legal/privacy_policy_en.md
+    - assets/legal/privacy_policy_ar.md
     - assets/sounds/pharmalens_alarm.wav
     - assets/branding/
     - assets/images/

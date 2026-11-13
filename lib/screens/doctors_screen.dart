@@ -577,16 +577,9 @@ class _DoctorsScreenState extends State<DoctorsScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
-        Row(
-          children: <Widget>[
-            const AdaptiveBackButton(),
-            Expanded(
-              child: _DirectoryHeader(
-                total: _metadata.totalDoctors,
-                isArabic: _isArabic,
-              ),
-            ),
-          ],
+        _DirectoryHeader(
+          total: _metadata.totalDoctors,
+          isArabic: _isArabic,
         ),
 
         const SizedBox(height: 14),
@@ -853,32 +846,10 @@ class _DirectoryHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final palette = PharmaLensTheme.paletteOf(context);
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: <Widget>[
-        Semantics(
-          header: true,
-          child: Text(
-            appText(isArabic).doctors2,
-            style: TextStyle(
-              color: palette.textPrimary,
-              fontSize: 26,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-        ),
-        const SizedBox(height: 2),
-        Text(
-          appText(isArabic).doctorsRegisteredWithTheLebaneseOrder(formatCount(total)),
-          style: TextStyle(
-            color: palette.textSecondary,
-            fontSize: 12.5,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-      ],
+    return GradientPageHeader(
+      icon: Icons.medical_services_rounded,
+      title: appText(isArabic).doctors2,
+      subtitle: appText(isArabic).doctorsRegisteredWithTheLebaneseOrder(formatCount(total)),
     );
   }
 }

@@ -4,10 +4,12 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../app/app_settings_scope.dart';
 import '../l10n/app_text.dart';
 import '../theme/pharmalens_theme.dart';
+import '../widgets/official_notice.dart';
 import '../widgets/reminder_setup_sheet.dart';
 
-/// First launch: what the app does, how data is handled (the prescription
-/// photo is read by Google's Gemini AI), and the reminder permissions.
+/// First launch: what the app does, that it is an individual initiative and
+/// not the MOPH app, how data is handled (the prescription photo is read by
+/// Google's Gemini AI), and the reminder permissions.
 /// Every step can be skipped; reminder setup is offered again later.
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key, required this.onDone});
@@ -45,11 +47,15 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setBool(OnboardingScreen.seenKey, true);
     } catch (_) {}
+    // The "not the MOPH app" page counts as the one-time notice.
+    await OfficialNoticeCard.markSeen();
     widget.onDone();
   }
 
+  static const int _lastPage = 3;
+
   void _next() {
-    if (_page < 2) {
+    if (_page < _lastPage) {
       _pages.nextPage(duration: const Duration(milliseconds: 320), curve: Curves.easeOutCubic);
     } else {
       _finish();
@@ -71,6 +77,18 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           (Icons.price_check_rounded, appText(_isArabic).officialMophPricesAndCheaperEquivalents),
           (Icons.health_and_safety_outlined, appText(_isArabic).allergyAndDuplicateChecks),
           (Icons.alarm_rounded, appText(_isArabic).remindersAndAlarmsForEveryDose),
+        ],
+      ),
+      // Not the Ministry's app: an individual initiative using its prices.
+      _Page(
+        image: 'assets/branding/logo_mark.png',
+        imageSize: 120,
+        title: appText(_isArabic).notAnOfficialMophApp,
+        body: appText(_isArabic).notAnOfficialMophAppBody,
+        points: [
+          (Icons.person_outline_rounded, appText(_isArabic).anIndividualInitiative),
+          (Icons.verified_outlined, appText(_isArabic).pricesComeFromTheOfficialMophWebsite),
+          (Icons.smart_toy_outlined, appText(_isArabic).aiNeverReplacesYourDoctor),
         ],
       ),
       _Page(
@@ -163,9 +181,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                           textStyle: const TextStyle(fontWeight: FontWeight.w900, fontSize: 15),
                         ),
                         child: Text(
-                          _page == 1
+                          _page == 1 || _page == 2
                               ? appText(_isArabic).iUnderstand
-                              : _page == 2
+                              : _page == _lastPage
                                   ? appText(_isArabic).start
                                   : appText(_isArabic).next,
                         ),

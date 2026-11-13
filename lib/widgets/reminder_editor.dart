@@ -12,12 +12,15 @@ import 'alarm_sound_tile.dart';
 import 'reminder_setup_sheet.dart';
 
 /// Opens the add/edit reminder dialog. Returns true when a reminder was saved.
+/// A new reminder belongs to [profileId] (e.g. the family member a scan was
+/// for), or to the selected person in My Health.
 Future<bool> showReminderEditor(
   BuildContext context, {
   String medicineName = '',
   String medicineId = '',
   String doseNote = '',
   MedicineReminder? existing,
+  String? profileId,
 }) async {
   final saved = await showDialog<bool>(
     context: context,
@@ -26,6 +29,7 @@ Future<bool> showReminderEditor(
       medicineId: existing?.medicineId ?? medicineId,
       doseNote: existing?.doseNote ?? doseNote,
       existing: existing,
+      profileId: profileId,
     ),
   );
   return saved == true;
@@ -52,12 +56,14 @@ class _ReminderEditorDialog extends StatefulWidget {
     required this.medicineId,
     required this.doseNote,
     this.existing,
+    this.profileId,
   });
 
   final String medicineName;
   final String medicineId;
   final String doseNote;
   final MedicineReminder? existing;
+  final String? profileId;
 
   @override
   State<_ReminderEditorDialog> createState() => _ReminderEditorDialogState();
@@ -170,7 +176,7 @@ class _ReminderEditorDialogState extends State<_ReminderEditorDialog> {
         speakName: _speakName,
         packUnits: packUnits,
         unitsPerDose: perDose,
-        profileId: HealthProfileService().active.id,
+        profileId: widget.profileId ?? HealthProfileService().active.id,
       );
     } else {
       await service.update(existing.copyWith(

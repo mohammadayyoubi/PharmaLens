@@ -19,7 +19,9 @@ import '../services/prescription_history_service.dart';
 import '../services/reminder_service.dart';
 import '../theme/pharmalens_theme.dart';
 import '../utils/formatters.dart';
+import '../widgets/official_notice.dart';
 import '../widgets/responsive.dart';
+import '../widgets/scan_flow.dart';
 
 enum AppTab {
   home,
@@ -70,8 +72,14 @@ class _AppShellState extends State<AppShell> {
 
     MophMedicineService().datasetRevision.addListener(_onPricesUpdated);
     ReminderService().pendingDose.addListener(_onDoseDue);
-    // A reminder notification may have launched the app.
-    WidgetsBinding.instance.addPostFrameCallback((_) => _onDoseDue());
+    // A reminder notification may have launched the app. Otherwise each
+    // launch starts with the "AI can make mistakes" acknowledgement (or, once,
+    // the "not the MOPH app" notice for people onboarded before it existed).
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final launchedForDose = ReminderService().pendingDose.value != null;
+      _onDoseDue();
+      if (!launchedForDose && mounted) unawaited(showStartupNotice(context));
+    });
 
     // Web links such as /?tab=doctors open that section directly.
     if (kIsWeb) {
@@ -157,13 +165,21 @@ class _AppShellState extends State<AppShell> {
 
   bool get _isArabic => Localizations.localeOf(context).languageCode == 'ar';
 
+  /// Phone bar: two tabs, the Scan button, two tabs. Doctors opens from
+  /// the home page (and the rail and sidebar on wider screens).
   static const List<AppTab> _compactTabs = <AppTab>[
     AppTab.home,
     AppTab.medicines,
-    AppTab.doctors,
     AppTab.pharmacies,
     AppTab.myHealth,
   ];
+
+  /// Scan from anywhere: who it is for, then camera or gallery (see
+  /// startPrescriptionScan). The analysis opens in the current section.
+  void _scan() {
+    final activeTab = Breakpoints.isCompact(context) && _tab == AppTab.settings ? AppTab.home : _tab;
+    unawaited(startPrescriptionScan(context, navigator: _navigatorKeys[activeTab]!.currentState));
+  }
 
   void _select(AppTab tab) {
     final compact = Breakpoints.isCompact(context);
@@ -291,19 +307,23 @@ class _AppShellState extends State<AppShell> {
     Widget body;
     if (compact) {
       body = Scaffold(
+        backgroundColor: PharmaLensTheme.paletteOf(context).background,
+        // Each section's own Scaffold makes room for the keyboard; resizing
+        // here too laid the whole shell out again on every keyboard frame.
+        resizeToAvoidBottomInset: false,
+        // The page continues under the bar: the space above the bar left for
+        // the raised Scan button shows the page, not a grey band. Sections
+        // keep clear of the bar through MediaQuery's bottom padding.
+        extendBody: true,
         body: content,
-        bottomNavigationBar: NavigationBar(
-          selectedIndex: _compactTabs.indexOf(activeTab).clamp(0, _compactTabs.length - 1),
-          onDestinationSelected: (index) => _select(_compactTabs[index]),
-          labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
-          destinations: [
-            for (final tab in _compactTabs)
-              NavigationDestination(
-                icon: Icon(_icons(tab).$1),
-                selectedIcon: Icon(_icons(tab).$2),
-                label: _label(tab),
-              ),
-          ],
+        bottomNavigationBar: _PhoneNavBar(
+          tabs: _compactTabs,
+          current: activeTab,
+          label: _label,
+          icons: _icons,
+          onSelect: _select,
+          onScan: _scan,
+          isArabic: _isArabic,
         ),
       );
     } else {
@@ -316,6 +336,7 @@ class _AppShellState extends State<AppShell> {
                 label: _label,
                 icons: _icons,
                 onSelect: _select,
+                onScan: _scan,
                 isArabic: _isArabic,
               )
             else
@@ -324,6 +345,8 @@ class _AppShellState extends State<AppShell> {
                 label: _label,
                 icons: _icons,
                 onSelect: _select,
+                onScan: _scan,
+                isArabic: _isArabic,
               ),
             Expanded(child: content),
           ],
@@ -345,18 +368,223 @@ class _AppShellState extends State<AppShell> {
   }
 }
 
+/// Phone navigation: a flat bar in the theme's surface color (white in light
+/// mode, navy in dark mode) with two sections on each side of a raised Scan
+/// button. The button sits in a halo of the bar's color, so it looks lifted
+/// out of the bar. Every label stays on one line (it shrinks instead of
+/// wrapping on narrow phones or with large text).
+///
+/// Kept cheap on purpose: no notch, docked button or elevation (the old
+/// notched bar and its docked button were laid out again on every frame of
+/// the keyboard animation, which made the app lag), it repaints on its own
+/// layer, and it is hidden while the keyboard is open.
+class _PhoneNavBar extends StatelessWidget {
+  const _PhoneNavBar({
+    required this.tabs,
+    required this.current,
+    required this.label,
+    required this.icons,
+    required this.onSelect,
+    required this.onScan,
+    required this.isArabic,
+  });
+
+  final List<AppTab> tabs;
+  final AppTab current;
+  final String Function(AppTab) label;
+  final (IconData, IconData) Function(AppTab) icons;
+  final void Function(AppTab) onSelect;
+  final VoidCallback onScan;
+  final bool isArabic;
+
+  static const double _barHeight = 70;
+  static const double _lift = 20;
+  static const double _halo = 74;
+  static const double _button = 56;
+
+  @override
+  Widget build(BuildContext context) {
+    if (MediaQuery.viewInsetsOf(context).bottom > 0) return const SizedBox.shrink();
+
+    final palette = PharmaLensTheme.paletteOf(context);
+    final isDark = PharmaLensTheme.isDark(context);
+    final bottomInset = MediaQuery.paddingOf(context).bottom;
+    final half = tabs.length ~/ 2;
+    final text = appText(isArabic);
+    final selectedColor = isDark ? PharmaLensColors.brightCyan : PharmaLensColors.teal;
+    final shadow = Color.fromRGBO(0, 0, 0, isDark ? 0.35 : 0.07);
+
+    Widget caption(String value, {required bool selected, Color? color}) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 2),
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text(
+            value,
+            maxLines: 1,
+            style: TextStyle(
+              color: color ?? (selected ? palette.textPrimary : palette.textSecondary),
+              fontSize: 11.5,
+              fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+            ),
+          ),
+        ),
+      );
+    }
+
+    Widget item(AppTab tab) {
+      final selected = tab == current;
+      return Expanded(
+        child: Semantics(
+          selected: selected,
+          button: true,
+          label: label(tab),
+          child: InkResponse(
+            onTap: () => onSelect(tab),
+            radius: 36,
+            child: ExcludeSemantics(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 160),
+                    child: Icon(
+                      selected ? icons(tab).$2 : icons(tab).$1,
+                      key: ValueKey<bool>(selected),
+                      size: 25,
+                      color: selected ? selectedColor : palette.textSecondary,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  caption(label(tab), selected: selected),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    return MediaQuery.withClampedTextScaling(
+      maxScaleFactor: 1.1,
+      child: RepaintBoundary(
+        child: SizedBox(
+          key: const Key('phone-nav'),
+          height: _lift + _barHeight + bottomInset,
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              // The bar, down to the bottom edge of the screen.
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 0,
+                height: _barHeight + bottomInset,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: palette.surface,
+                    border: Border(top: BorderSide(color: palette.border)),
+                    boxShadow: [BoxShadow(color: shadow, blurRadius: 16, offset: const Offset(0, -4))],
+                  ),
+                  child: Padding(
+                    padding: EdgeInsets.only(bottom: bottomInset),
+                    child: Material(
+                      type: MaterialType.transparency,
+                      child: Row(
+                        children: [
+                          for (final tab in tabs.take(half)) item(tab),
+                          // Room for the raised Scan button and its label.
+                          const Spacer(),
+                          for (final tab in tabs.skip(half)) item(tab),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              // The halo in the bar's color, then the Scan button in it.
+              Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                child: Center(
+                  child: Container(
+                    width: _halo,
+                    height: _halo,
+                    decoration: BoxDecoration(
+                      color: palette.surface,
+                      borderRadius: BorderRadius.circular(26),
+                      boxShadow: [BoxShadow(color: shadow, blurRadius: 12, offset: const Offset(0, -3))],
+                    ),
+                    alignment: Alignment.topCenter,
+                    padding: const EdgeInsets.only(top: (_halo - _button) / 2),
+                    child: Semantics(
+                      button: true,
+                      label: text.scanAPrescription,
+                      child: Tooltip(
+                        message: text.scanAPrescription,
+                        child: PressableScale(
+                          child: Material(
+                            color: Colors.transparent,
+                            borderRadius: BorderRadius.circular(19),
+                            child: Ink(
+                              width: _button,
+                              height: _button,
+                              decoration: BoxDecoration(
+                                gradient: PharmaLensGradients.primary,
+                                borderRadius: BorderRadius.circular(19),
+                                boxShadow: PharmaLensShadows.cyanGlow,
+                              ),
+                              child: InkWell(
+                                key: const Key('scan-button'),
+                                onTap: onScan,
+                                borderRadius: BorderRadius.circular(19),
+                                child: const ExcludeSemantics(
+                                  child: Icon(Icons.document_scanner_rounded, color: Colors.white, size: 27),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              // "Scan" under the button, drawn last: the halo is the bar's
+              // color and used to cover the bottom of this label.
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: bottomInset + 7,
+                child: IgnorePointer(
+                  child: Center(child: caption(text.scan, selected: true, color: selectedColor)),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _Rail extends StatelessWidget {
   const _Rail({
     required this.current,
     required this.label,
     required this.icons,
     required this.onSelect,
+    required this.onScan,
+    required this.isArabic,
   });
 
   final AppTab current;
   final String Function(AppTab) label;
   final (IconData, IconData) Function(AppTab) icons;
   final void Function(AppTab) onSelect;
+  final VoidCallback onScan;
+  final bool isArabic;
 
   @override
   Widget build(BuildContext context) {
@@ -373,9 +601,23 @@ class _Rail extends StatelessWidget {
           selectedIndex: AppTab.values.indexOf(current),
           onDestinationSelected: (index) => onSelect(AppTab.values[index]),
           labelType: NavigationRailLabelType.all,
-          leading: const Padding(
-            padding: EdgeInsets.only(bottom: 12, top: 6),
-            child: _LogoMark(size: 40),
+          leading: Padding(
+            padding: const EdgeInsets.only(bottom: 12, top: 6),
+            child: Column(
+              children: [
+                const _LogoMark(size: 40),
+                const SizedBox(height: 12),
+                FloatingActionButton.small(
+                  heroTag: null,
+                  tooltip: appText(isArabic).scanAPrescription,
+                  onPressed: onScan,
+                  backgroundColor: PharmaLensColors.teal,
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  child: const Icon(Icons.document_scanner_rounded),
+                ),
+              ],
+            ),
           ),
           indicatorColor: palette.tealSurface,
           selectedIconTheme: const IconThemeData(color: PharmaLensColors.teal),
@@ -399,6 +641,7 @@ class _Sidebar extends StatelessWidget {
     required this.label,
     required this.icons,
     required this.onSelect,
+    required this.onScan,
     required this.isArabic,
   });
 
@@ -406,6 +649,7 @@ class _Sidebar extends StatelessWidget {
   final String Function(AppTab) label;
   final (IconData, IconData) Function(AppTab) icons;
   final void Function(AppTab) onSelect;
+  final VoidCallback onScan;
   final bool isArabic;
 
   @override
@@ -456,7 +700,15 @@ class _Sidebar extends StatelessWidget {
                   ),
                 ],
               ),
-              const SizedBox(height: 28),
+              const SizedBox(height: 22),
+              PressableScale(
+                child: FilledButton.icon(
+                  onPressed: onScan,
+                  icon: const Icon(Icons.document_scanner_rounded),
+                  label: Text(appText(isArabic).scanAPrescription),
+                ),
+              ),
+              const SizedBox(height: 18),
               for (final tab in AppTab.values) ...[
                 if (tab == AppTab.settings) const Spacer(),
                 _SidebarItem(

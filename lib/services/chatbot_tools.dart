@@ -63,8 +63,9 @@ class ChatbotTools {
     ),
     GeminiTool(
       name: 'check_safety',
-      description: "Checks MOPH products against each other and against the user's allergy list: allergies, "
-          'related-class allergies, the same ingredient twice and two medicines from one class.',
+      description: "Checks MOPH products against each other and against the selected person's allergies and health "
+          'conditions: allergies, related-class allergies, medicine groups known to affect a condition (e.g. beta '
+          'blockers and asthma), the same ingredient twice and two medicines from one class.',
       parameters: <String, dynamic>{
         'type': 'OBJECT',
         'properties': <String, dynamic>{
@@ -80,7 +81,8 @@ class ChatbotTools {
     GeminiTool(
       name: 'get_my_health',
       description: "Data saved on this device for the selected person (the user or a family member): allergies, "
-          'health conditions (pregnant, breastfeeding, child, kidney, liver), medicine reminders and the most recent '
+          'health conditions (pregnant, breastfeeding, child, kidney, liver, asthma, COPD, heart, high blood pressure, '
+          'diabetes, cancer, and any the user typed), age, medicine reminders and the most recent '
           'scanned prescriptions with their medicines.',
     ),
     GeminiTool(
@@ -247,10 +249,12 @@ class ChatbotTools {
 
   Future<Map<String, dynamic>> _safety(List<String> ids) async {
     final products = ids.map(_find).whereType<MedicinePrice>().toList();
-    final allergies = HealthProfileService().allergies;
+    final person = HealthProfileService().active;
+    final allergies = person.allergies;
     final alerts = const MedicationSafetyService().check(
       products,
       allergies: allergies,
+      conditions: person.effectiveConditions,
       catalog: MophMedicineService().catalog,
     );
     final isArabic = languageCode == 'ar';
@@ -259,6 +263,7 @@ class ChatbotTools {
       'checked': products.map((p) => p.brandName).toList(),
       if (products.length < ids.length) 'not_found': ids.where((id) => _find(id) == null).toList(),
       'allergies_on_file': allergies,
+      'conditions_on_file': person.conditionNames(isArabic: false),
       'alerts': <Map<String, dynamic>>[
         for (final alert in alerts)
           <String, dynamic>{
@@ -282,7 +287,8 @@ class ChatbotTools {
       'person': person.isOwner ? 'the user' : person.name,
       if (profile.hasFamily) 'family_members': profile.profiles.where((p) => !p.isOwner).map((p) => p.name).toList(),
       'allergies': profile.allergies,
-      'conditions': profile.conditions.map((c) => c.name).toList(),
+      'conditions': person.conditionNames(isArabic: false),
+      if (person.age != null) 'age': person.age,
       'reminders': <Map<String, dynamic>>[
         for (final reminder in reminders.reminders.where((r) => r.profileId == person.id))
           <String, dynamic>{

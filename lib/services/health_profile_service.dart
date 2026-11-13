@@ -5,35 +5,65 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../l10n/app_text.dart';
 
 /// Health situations that change what is safe to take. They are shown next
-/// to the matching parts of a medicine's label; they never change doses.
-enum HealthCondition { pregnant, breastfeeding, child, kidney, liver }
+/// to the matching parts of a medicine's label and checked against the
+/// medicine's class (MedicationSafetyService); they never change doses.
+/// Stored by name, so new values can be added at the end.
+enum HealthCondition {
+  pregnant,
+  breastfeeding,
+  child,
+  kidney,
+  liver,
+  asthma,
+  copd,
+  heart,
+  highBloodPressure,
+  diabetes,
+  cancer,
+}
 
 extension HealthConditionText on HealthCondition {
   String label({required bool isArabic}) {
+    final text = appText(isArabic);
     switch (this) {
       case HealthCondition.pregnant:
-        return appText(isArabic).pregnant;
+        return text.pregnant;
       case HealthCondition.breastfeeding:
-        return appText(isArabic).breastfeeding;
+        return text.breastfeeding;
       case HealthCondition.child:
-        return appText(isArabic).childUnder12;
+        return text.childUnder12;
       case HealthCondition.kidney:
-        return appText(isArabic).kidneyDisease;
+        return text.kidneyDisease;
       case HealthCondition.liver:
-        return appText(isArabic).liverDisease;
+        return text.liverDisease;
+      case HealthCondition.asthma:
+        return text.asthma;
+      case HealthCondition.copd:
+        return text.copd;
+      case HealthCondition.heart:
+        return text.heartDisease;
+      case HealthCondition.highBloodPressure:
+        return text.highBloodPressure;
+      case HealthCondition.diabetes:
+        return text.diabetes;
+      case HealthCondition.cancer:
+        return text.cancer;
     }
   }
 }
 
 enum BiologicalSex { female, male }
 
-/// WHO adult categories: under 18.5, 18.5-24.9, 25-29.9, 30 and over.
+/// WHO adult categories: under 18.5, 18.5-24.9, 25-29.9, then obesity
+/// class I (30-34.9), II (35-39.9) and III (40 and over).
 String bmiCategory(double bmi, {required bool isArabic}) {
   final text = appText(isArabic);
   if (bmi < 18.5) return text.bmiUnderweight;
   if (bmi < 25) return text.bmiHealthy;
   if (bmi < 30) return text.bmiOverweight;
-  return text.bmiObesity;
+  if (bmi < 35) return text.bmiObesity1;
+  if (bmi < 40) return text.bmiObesity2;
+  return text.bmiObesity3;
 }
 
 /// One person whose medicines are managed in the app (the user, a parent,
@@ -44,6 +74,7 @@ class HealthProfile {
     required this.name,
     this.allergies = const <String>[],
     this.conditions = const <HealthCondition>{},
+    this.otherConditions = const <String>[],
     this.birthYear,
     this.sex,
     this.heightCm,
@@ -57,6 +88,24 @@ class HealthProfile {
   final String name;
   final List<String> allergies;
   final Set<HealthCondition> conditions;
+
+  /// Conditions typed by the user ("Other…"), e.g. "Epilepsy".
+  final List<String> otherConditions;
+
+  /// Every condition's name, the listed ones first.
+  List<String> conditionNames({required bool isArabic}) => <String>[
+        for (final condition in HealthCondition.values)
+          if (conditions.contains(condition)) condition.label(isArabic: isArabic),
+        ...otherConditions,
+      ];
+
+  bool get hasHealthInfo => allergies.isNotEmpty || conditions.isNotEmpty || otherConditions.isNotEmpty;
+
+  /// [conditions], plus "child" when the saved age is under 12.
+  Set<HealthCondition> get effectiveConditions {
+    final years = age;
+    return <HealthCondition>{...conditions, if (years != null && years < 12) HealthCondition.child};
+  }
 
   /// Entered as an age; the year is kept so the age stays right next year.
   final int? birthYear;
@@ -79,11 +128,18 @@ class HealthProfile {
 
   String displayName({required bool isArabic}) => isOwner ? appText(isArabic).me : name;
 
-  HealthProfile copyWith({String? name, List<String>? allergies, Set<HealthCondition>? conditions}) => HealthProfile(
+  HealthProfile copyWith({
+    String? name,
+    List<String>? allergies,
+    Set<HealthCondition>? conditions,
+    List<String>? otherConditions,
+  }) =>
+      HealthProfile(
         id: id,
         name: name ?? this.name,
         allergies: allergies ?? this.allergies,
         conditions: conditions ?? this.conditions,
+        otherConditions: otherConditions ?? this.otherConditions,
         birthYear: birthYear,
         sex: sex,
         heightCm: heightCm,
@@ -96,6 +152,7 @@ class HealthProfile {
         name: name,
         allergies: allergies,
         conditions: conditions,
+        otherConditions: otherConditions,
         birthYear: birthYear,
         sex: sex,
         heightCm: heightCm,
@@ -107,6 +164,7 @@ class HealthProfile {
         'name': name,
         'allergies': allergies,
         'conditions': conditions.map((c) => c.name).toList(),
+        if (otherConditions.isNotEmpty) 'otherConditions': otherConditions,
         if (birthYear != null) 'birthYear': birthYear,
         if (sex != null) 'sex': sex!.name,
         if (heightCm != null) 'heightCm': heightCm,
@@ -126,6 +184,9 @@ class HealthProfile {
               .whereType<HealthCondition>()
               .toSet()
           : const <HealthCondition>{},
+      otherConditions: json['otherConditions'] is List
+          ? (json['otherConditions'] as List).map((e) => '$e'.trim()).where((e) => e.isNotEmpty).toList()
+          : const <String>[],
       birthYear: (json['birthYear'] as num?)?.toInt(),
       sex: BiologicalSex.values.where((s) => s.name == json['sex']).firstOrNull,
       heightCm: (json['heightCm'] as num?)?.toDouble(),
@@ -223,6 +284,16 @@ class HealthProfileService extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Removes every family member and empties the owner's profile ("Delete
+  /// all my data" in Settings).
+  Future<void> reset() async {
+    await load();
+    _profiles = const <HealthProfile>[HealthProfile(id: ownerId, name: '')];
+    _activeId = ownerId;
+    await _persist();
+    notifyListeners();
+  }
+
   Future<void> addAllergy(String value) async {
     await load();
 
@@ -245,6 +316,20 @@ class HealthProfileService extends ChangeNotifier {
       if (!next.remove(condition)) next.add(condition);
       return p.copyWith(conditions: next);
     });
+  }
+
+  /// A condition the user typed ("Other…") for the selected person.
+  Future<void> addOtherCondition(String value) async {
+    await load();
+    final cleaned = value.trim();
+    if (cleaned.isEmpty) return;
+    if (active.otherConditions.any((c) => c.toLowerCase() == cleaned.toLowerCase())) return;
+    await _update(_activeId, (p) => p.copyWith(otherConditions: <String>[...p.otherConditions, cleaned]));
+  }
+
+  Future<void> removeOtherCondition(String value) async {
+    await load();
+    await _update(_activeId, (p) => p.copyWith(otherConditions: p.otherConditions.where((c) => c != value).toList()));
   }
 
   /// Age, sex, height and weight of the selected person; medicine pages use

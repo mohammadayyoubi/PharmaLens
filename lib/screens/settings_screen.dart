@@ -2,13 +2,18 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../app/app_info.dart';
 import '../app/app_settings_scope.dart';
+import '../services/user_data_service.dart';
+import 'privacy_policy_screen.dart';
 import '../l10n/app_localizations.dart';
 import '../l10n/app_text.dart';
 import '../services/moph_medicine_service.dart';
 import '../theme/pharmalens_theme.dart';
 import '../utils/formatters.dart';
 import '../widgets/chatbot_view.dart';
+import '../widgets/emergency_numbers.dart';
+import '../widgets/official_notice.dart';
 import '../widgets/sync_progress.dart';
 
 class SettingsScreen
@@ -31,6 +36,8 @@ class _DeveloperCard extends StatelessWidget {
     required this.whatsApp,
     required this.instagramHandle,
     required this.onInstagram,
+    required this.website,
+    required this.onWebsite,
   });
 
   final bool isArabic;
@@ -38,6 +45,8 @@ class _DeveloperCard extends StatelessWidget {
   final String whatsApp;
   final String instagramHandle;
   final VoidCallback onInstagram;
+  final String website;
+  final VoidCallback onWebsite;
 
   @override
   Widget build(BuildContext context) {
@@ -53,6 +62,19 @@ class _DeveloperCard extends StatelessWidget {
       ),
       child: Column(
         children: [
+          // The logo has a white background; a white plate keeps it clean
+          // in dark mode too.
+          Semantics(
+            image: true,
+            label: developer,
+            child: Container(
+              constraints: const BoxConstraints(maxWidth: 260),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14)),
+              child: Image.asset('assets/branding/techwrap_logo.png', fit: BoxFit.contain),
+            ),
+          ),
+          const SizedBox(height: 12),
           const _LebanonFlag(width: 42),
           const SizedBox(height: 10),
           Text(
@@ -72,6 +94,12 @@ class _DeveloperCard extends StatelessWidget {
             spacing: 8,
             runSpacing: 8,
             children: [
+              ActionChip(
+                avatar: const Icon(Icons.language_rounded, size: 18, color: PharmaLensColors.accentBlue),
+                label: Text(website, textDirection: TextDirection.ltr),
+                onPressed: onWebsite,
+                tooltip: appText(isArabic).website,
+              ),
               ActionChip(
                 avatar: const Icon(Icons.camera_alt_outlined, size: 18, color: PharmaLensColors.instagram),
                 label: Text('@$instagramHandle'),
@@ -124,24 +152,47 @@ class _LebanonFlag extends StatelessWidget {
 
 class _SettingsScreenState
     extends State<SettingsScreen> {
-  static const String _whatsAppNumber =
-      '96170080214';
+  static const String _whatsAppNumber = AppInfo.whatsAppNumber;
 
-  static const String
-  _displayWhatsAppNumber =
-      '+961 70 080 214';
+  static const String _displayWhatsAppNumber = AppInfo.whatsAppDisplay;
 
-  static const String _developerTeam =
-      'TechWrap LB';
+  static const String _developerTeam = AppInfo.developer;
 
-  static const String _instagramHandle =
-      'techwrap.lb';
+  static const String _instagramHandle = AppInfo.instagramHandle;
 
-  static const String _instagramUrl =
-      'https://www.instagram.com/techwrap.lb/';
+  static const String _instagramUrl = AppInfo.instagramUrl;
 
+  static const String _website = AppInfo.website;
+
+  static const String _websiteUrl = AppInfo.websiteUrl;
+
+  /// Keep in step with `version:` in pubspec.yaml.
   static const String _appVersion =
-      '1.1.0';
+      '1.2.0';
+
+  Future<void> _confirmDeleteAllData() async {
+    final text = appText(_isArabic);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        icon: const Icon(Icons.delete_forever_rounded, color: PharmaLensColors.danger, size: 32),
+        title: Text(text.deleteAllMyDataQuestion),
+        content: Text(text.deleteAllMyDataBody),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(dialogContext).pop(false), child: Text(text.cancel)),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: PharmaLensColors.danger),
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: Text(text.delete),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    await deleteAllUserData();
+    messenger.showSnackBar(SnackBar(content: Text(text.allYourDataWasDeleted)));
+  }
 
 
   AppLocalizations get _l10n {
@@ -624,11 +675,16 @@ class _SettingsScreenState
                 ),
 
                 const SizedBox(
-                  height: 10,
+                  height: 14,
+                ),
+
+                // Not the MOPH app; an individual initiative.
+                OfficialNoticeCard(
+                  isArabic: _isArabic,
                 ),
 
                 const SizedBox(
-                  height: 10,
+                  height: 14,
                 ),
 
                 _ValuePill(
@@ -646,6 +702,8 @@ class _SettingsScreenState
                   whatsApp: _displayWhatsAppNumber,
                   instagramHandle: _instagramHandle,
                   onInstagram: () => _openExternal(_instagramUrl),
+                  website: _website,
+                  onWebsite: () => _openExternal(_websiteUrl),
                 ),
 
                 const SizedBox(
@@ -913,6 +971,12 @@ class _SettingsScreenState
                         onTap:
                         _openWhatsApp,
                       ),
+                      _SettingsTile(
+                        icon: Icons.sos_rounded,
+                        title: appText(_isArabic).emergencyNumbers,
+                        subtitle: appText(_isArabic).emergencyNumbersSubtitle,
+                        onTap: () => showEmergencyNumbersSheet(context),
+                      ),
                     ],
                   ),
 
@@ -941,6 +1005,30 @@ class _SettingsScreenState
                             onTap: busy ? null : _manualSyncMoph,
                           );
                         },
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(
+                    height: 20,
+                  ),
+
+                  _SettingsSection(
+                    title: appText(_isArabic).privacyAndData,
+                    children: [
+                      _SettingsTile(
+                        icon: Icons.privacy_tip_outlined,
+                        title: appText(_isArabic).privacyPolicy,
+                        subtitle: appText(_isArabic).privacyPolicySubtitle,
+                        onTap: () => Navigator.of(context).push(
+                          MaterialPageRoute<void>(builder: (_) => const PrivacyPolicyScreen()),
+                        ),
+                      ),
+                      _SettingsTile(
+                        icon: Icons.delete_forever_outlined,
+                        title: appText(_isArabic).deleteAllMyData,
+                        subtitle: appText(_isArabic).deleteAllMyDataSubtitle,
+                        onTap: _confirmDeleteAllData,
                       ),
                     ],
                   ),

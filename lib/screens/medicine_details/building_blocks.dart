@@ -464,6 +464,13 @@ class _PrescriptionBox extends StatelessWidget {
               fontWeight: FontWeight.w700,
             ),
           ),
+          const SizedBox(height: 8),
+          // The handwriting was read by AI and can be misread.
+          AiNotice(
+            isArabic: isArabic,
+            message: appText(isArabic).directionsAsReadByAi,
+            compact: true,
+          ),
         ],
       ),
     );

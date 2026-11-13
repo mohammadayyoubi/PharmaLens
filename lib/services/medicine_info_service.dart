@@ -1,8 +1,11 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
+import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/medicine_knowledge.dart';
@@ -498,10 +501,82 @@ $source
   // Cache
   // ---------------------------------------------------------------------------
 
-  Future<MedicineInfo?> _readCache(String key, MedicinePrice medicine) async {
+  /// One file per entry. The cache used to live in SharedPreferences, where
+  /// it grew with every medicine opened; Android reads all of
+  /// SharedPreferences before the first screen, so the app opened slower
+  /// and slower. Null on the web and in tests (no file system): those keep
+  /// SharedPreferences.
+  static Future<File?> _cacheFile(String key) async {
+    if (kIsWeb) return null;
+    try {
+      final directory = await getApplicationSupportDirectory();
+      final separator = Platform.pathSeparator;
+      return File('${directory.path}${separator}medicine_info$separator${md5.convert(utf8.encode(key))}.json');
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<String?> _readRaw(String key) async {
+    final file = await _cacheFile(key);
+    if (file != null) return await file.exists() ? file.readAsString() : null;
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString('$_cachePrefix$key');
+  }
+
+  Future<void> _writeRaw(String key, String value) async {
+    final file = await _cacheFile(key);
+    if (file != null) {
+      await file.parent.create(recursive: true);
+      await file.writeAsString(value, flush: true);
+      return;
+    }
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('$_cachePrefix$key', value);
+  }
+
+  /// Deletes every cached medicine page ("Delete all my data" in Settings:
+  /// the cache shows which medicines were looked up).
+  Future<void> clearCache() async {
+    _memory.clear();
+    await dropCacheFromPreferences();
+    if (kIsWeb) {
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        for (final key in prefs.getKeys().where((k) => k.startsWith(_cachePrefix)).toList()) {
+          await prefs.remove(key);
+        }
+      } catch (_) {}
+      return;
+    }
+    try {
+      final file = await _cacheFile('x');
+      final folder = file?.parent;
+      if (folder != null && await folder.exists()) await folder.delete(recursive: true);
+    } catch (error) {
+      debugPrint('MedicineInfoService: could not delete the cache: $error');
+    }
+  }
+
+  /// Removes entries older versions left in SharedPreferences (see
+  /// [_cacheFile]). Run once the app is up; the next launches are faster.
+  static Future<void> dropCacheFromPreferences() async {
+    if (kIsWeb) return;
     try {
       final prefs = await SharedPreferences.getInstance();
-      final raw = prefs.getString('$_cachePrefix$key');
+      final legacy = prefs.getKeys().where((k) => k.startsWith(_cachePrefix)).toList();
+      for (final key in legacy) {
+        await prefs.remove(key);
+      }
+      if (legacy.isNotEmpty) debugPrint('MedicineInfoService: moved the cache out of preferences (${legacy.length} entries).');
+    } catch (error) {
+      debugPrint('MedicineInfoService: could not clean preferences: $error');
+    }
+  }
+
+  Future<MedicineInfo?> _readCache(String key, MedicinePrice medicine) async {
+    try {
+      final raw = await _readRaw(key);
       if (raw == null) return null;
 
       final json = jsonDecode(raw) as Map<String, dynamic>;
@@ -533,10 +608,9 @@ $source
 
   Future<void> _writeCache(String key, MedicineInfo info) async {
     try {
-      final prefs = await SharedPreferences.getInstance();
       final k = info.knowledge;
-      await prefs.setString(
-        '$_cachePrefix$key',
+      await _writeRaw(
+        key,
         jsonEncode(<String, dynamic>{
           'savedAt': DateTime.now().toIso8601String(),
           'origin': info.origin.name,

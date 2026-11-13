@@ -117,6 +117,19 @@ class DoseLogService extends ChangeNotifier {
     }
   }
 
+  /// Forgets every answered dose ("Delete all my data" in Settings).
+  Future<void> clear() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_storageKey);
+    } catch (error) {
+      debugPrint('DoseLogService: could not clear the log: $error');
+    }
+    _entries = <DoseLogEntry>[];
+    _loaded = true;
+    notifyListeners();
+  }
+
   DoseStatus? statusOf(int reminderId, DateTime day, int minutes) {
     final key = '$reminderId|${DoseLogEntry._date(day)}|$minutes';
     return _entries.where((e) => e.key == key).firstOrNull?.status;

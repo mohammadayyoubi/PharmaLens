@@ -107,6 +107,27 @@ class PrescriptionHistoryService extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Moves a saved record to another person (scanned for the wrong one).
+  Future<void> updateProfile(String id, String profileId) async {
+    await load();
+
+    final index = _records.indexWhere((r) => r.id == id);
+    if (index < 0 || _records[index].profileId == profileId) return;
+
+    final old = _records[index];
+    _records[index] = PrescriptionRecord(
+      id: old.id,
+      createdAt: old.createdAt,
+      doctorName: old.doctorName,
+      specialty: old.specialty,
+      imagePath: old.imagePath,
+      medicines: old.medicines,
+      profileId: profileId,
+    );
+    await _persist();
+    notifyListeners();
+  }
+
   Future<void> remove(String id) async {
     await load();
 

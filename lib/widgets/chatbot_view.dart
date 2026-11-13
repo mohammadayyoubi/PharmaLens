@@ -9,6 +9,7 @@ import '../models/chat_message.dart';
 import '../services/chatbot_service.dart';
 import '../theme/pharmalens_theme.dart';
 import 'markdown_text.dart';
+import 'report_answer_sheet.dart';
 
 class ChatbotView extends StatefulWidget {
   const ChatbotView({super.key, this.asSidePanel = false});
@@ -82,6 +83,9 @@ class _ChatbotViewState extends State<ChatbotView> {
   Uint8List? _attachedImageBytes;
   String? _attachedImageMimeType;
   bool _isSending = false;
+
+  /// Answers the user reported (see showReportAnswerSheet).
+  final Set<String> _reportedAnswers = <String>{};
 
   bool get _isArabic {
     return Localizations.localeOf(context).languageCode.toLowerCase() == 'ar';
@@ -570,6 +574,23 @@ class _ChatbotViewState extends State<ChatbotView> {
                             style: TextStyle(color: palette.textMuted, fontSize: 10.5, fontWeight: FontWeight.w600),
                           ),
                         ),
+                        // Google Play asks for a way to report AI answers.
+                        if (_reportedAnswers.contains(msg.id))
+                          Text(
+                            appText(_isArabic).answerReported,
+                            style: const TextStyle(color: PharmaLensColors.success, fontSize: 10.5, fontWeight: FontWeight.w800),
+                          )
+                        else
+                          IconButton(
+                            tooltip: appText(_isArabic).reportThisAnswer,
+                            visualDensity: VisualDensity.compact,
+                            style: IconButton.styleFrom(backgroundColor: Colors.transparent, minimumSize: const Size(32, 32)),
+                            icon: Icon(Icons.flag_outlined, size: 18, color: palette.textMuted),
+                            onPressed: () async {
+                              final sent = await showReportAnswerSheet(context, answer: msg.text, isArabic: _isArabic);
+                              if (sent && mounted) setState(() => _reportedAnswers.add(msg.id));
+                            },
+                          ),
                       ],
                     ),
                   ],

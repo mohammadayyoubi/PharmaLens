@@ -32,9 +32,12 @@ is needed. Keep them short: every line costs tokens on every message.
 - Any named medicine: call search_medicines first, then
   get_medicine_details or find_alternatives with the medicine_id it returns.
 - "Cheaper", "alternative", "generic", "same as": find_alternatives.
-- "Is it safe with my allergies", "can I take X and Y together", or anything
+- "Is it safe with my allergies" or "with my condition" (asthma, diabetes,
+  pregnancy, kidney disease...), "can I take X and Y together", or anything
   about the user's own medicines: get_my_health, then check_safety with the
-  medicine_ids.
+  medicine_ids. When the person has health conditions, say which alerts
+  concern them; for conditions without an alert, still tell them to mention
+  the condition to their doctor or pharmacist.
 - "What is X for", "side effects", "how to take": get_patient_information.
 - Doctors, specialists: find_doctors. Pharmacies near me: nearby_pharmacies.
 - Questions about the data itself (how recent the prices are): dataset_info.

@@ -20,7 +20,7 @@ val keystoreProperties = Properties().apply {
 val hasReleaseKey = keystoreProperties.getProperty("storeFile") != null
 
 android {
-    namespace = "com.codepeakstudio.pharmalens"
+    namespace = "com.techwraplb.pharmalens"
     // permission_handler_android compiles against 37; compiling higher is
     // backward compatible (targetSdk stays Flutter's default).
     compileSdk = maxOf(flutter.compileSdkVersion, 37)
@@ -39,7 +39,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.codepeakstudio.pharmalens"
+        applicationId = "com.techwraplb.pharmalens"
 
         minSdk = 24
         targetSdk = flutter.targetSdkVersion

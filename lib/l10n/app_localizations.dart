@@ -1043,7 +1043,7 @@ abstract class AppLocalizations {
   /// No description provided for @takeAPhotoOrUploadOne.
   ///
   /// In en, this message translates to:
-  /// **'Snap or upload a prescription. We read each medicine, show its official price, cheaper alternatives and how to take it, and warn you about allergies.'**
+  /// **'Snap or upload a prescription: we read each medicine, show its official price and cheaper options, and check your allergies.'**
   String get takeAPhotoOrUploadOne;
 
   /// No description provided for @takePhoto.
@@ -1067,7 +1067,7 @@ abstract class AppLocalizations {
   /// No description provided for @useAClearWellLitPhoto.
   ///
   /// In en, this message translates to:
-  /// **'Use a clear, well-lit photo of the whole prescription.'**
+  /// **'Use a clear photo of the whole prescription.'**
   String get useAClearWellLitPhoto;
 
   /// No description provided for @aPhoneReadingAPrescription.
@@ -3341,7 +3341,7 @@ abstract class AppLocalizations {
   /// No description provided for @somePhonesXiaomiHuaweiOppoSamsung.
   ///
   /// In en, this message translates to:
-  /// **'Some phones (Xiaomi, Huawei, Oppo, Samsung) stop reminders to save battery. In the app settings, open Battery and choose \"Unrestricted\".'**
+  /// **'Some phones (Xiaomi, Huawei, Oppo, Vivo, Tecno, Infinix, Samsung) stop reminders to save battery or after a restart. In the app settings, set Battery to \"Unrestricted\" and turn on \"Autostart\" if your phone has it.'**
   String get somePhonesXiaomiHuaweiOppoSamsung;
 
   /// No description provided for @displayOverOtherAppsIsNot.
@@ -3439,12 +3439,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Overweight'**
   String get bmiOverweight;
-
-  /// No description provided for @bmiObesity.
-  ///
-  /// In en, this message translates to:
-  /// **'Obesity'**
-  String get bmiObesity;
 
   /// No description provided for @checkWithYourDoctorBeforeUsingIt.
   ///
@@ -3595,6 +3589,463 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Change'**
   String get change;
+
+  /// No description provided for @scan.
+  ///
+  /// In en, this message translates to:
+  /// **'Scan'**
+  String get scan;
+
+  /// No description provided for @scanAPrescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Scan a prescription'**
+  String get scanAPrescription;
+
+  /// No description provided for @takeAPhotoOrChooseOneFromYourGallery.
+  ///
+  /// In en, this message translates to:
+  /// **'Take a photo of the prescription or choose one from your gallery.'**
+  String get takeAPhotoOrChooseOneFromYourGallery;
+
+  /// No description provided for @chooseFromGallery.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose from gallery'**
+  String get chooseFromGallery;
+
+  /// No description provided for @camera.
+  ///
+  /// In en, this message translates to:
+  /// **'Camera'**
+  String get camera;
+
+  /// No description provided for @thisPrescriptionIsFor.
+  ///
+  /// In en, this message translates to:
+  /// **'This prescription is for'**
+  String get thisPrescriptionIsFor;
+
+  /// No description provided for @forYou.
+  ///
+  /// In en, this message translates to:
+  /// **'For you'**
+  String get forYou;
+
+  /// No description provided for @forPerson.
+  ///
+  /// In en, this message translates to:
+  /// **'For {name}'**
+  String forPerson(Object name);
+
+  /// No description provided for @checkedAgainstYourHealthProfile.
+  ///
+  /// In en, this message translates to:
+  /// **'Checked against your allergies and health conditions.'**
+  String get checkedAgainstYourHealthProfile;
+
+  /// No description provided for @checkedAgainstPersonHealthProfile.
+  ///
+  /// In en, this message translates to:
+  /// **'Checked against the allergies and health conditions saved for {name}.'**
+  String checkedAgainstPersonHealthProfile(Object name);
+
+  /// No description provided for @noHealthInfoSavedForThisPerson.
+  ///
+  /// In en, this message translates to:
+  /// **'No allergies or conditions are saved for this person. Add them in My Health for better checks.'**
+  String get noHealthInfoSavedForThisPerson;
+
+  /// No description provided for @openMyHealth.
+  ///
+  /// In en, this message translates to:
+  /// **'Open My Health'**
+  String get openMyHealth;
+
+  /// No description provided for @whoIsThisPrescriptionFor.
+  ///
+  /// In en, this message translates to:
+  /// **'Who is this prescription for?'**
+  String get whoIsThisPrescriptionFor;
+
+  /// No description provided for @aiReadingNotice.
+  ///
+  /// In en, this message translates to:
+  /// **'Read by AI. AI can make mistakes: check every medicine, dose and direction with your pharmacist or doctor before taking anything.'**
+  String get aiReadingNotice;
+
+  /// No description provided for @aiCanMakeMistakesAskYourPharmacist.
+  ///
+  /// In en, this message translates to:
+  /// **'AI can make mistakes. Always ask your pharmacist or doctor.'**
+  String get aiCanMakeMistakesAskYourPharmacist;
+
+  /// No description provided for @directionsAsReadByAi.
+  ///
+  /// In en, this message translates to:
+  /// **'Directions as read by AI: confirm them with your pharmacist.'**
+  String get directionsAsReadByAi;
+
+  /// No description provided for @importantNotice.
+  ///
+  /// In en, this message translates to:
+  /// **'Important'**
+  String get importantNotice;
+
+  /// No description provided for @notAnOfficialMophApp.
+  ///
+  /// In en, this message translates to:
+  /// **'Not an official MOPH app'**
+  String get notAnOfficialMophApp;
+
+  /// No description provided for @notAnOfficialMophAppBody.
+  ///
+  /// In en, this message translates to:
+  /// **'PharmaLens is an individual initiative. It is not the Ministry of Public Health app and does not replace it or any official MOPH platform.'**
+  String get notAnOfficialMophAppBody;
+
+  /// No description provided for @pricesComeFromTheOfficialMophWebsite.
+  ///
+  /// In en, this message translates to:
+  /// **'All medicine prices come from the official price list published on the MOPH website (moph.gov.lb).'**
+  String get pricesComeFromTheOfficialMophWebsite;
+
+  /// No description provided for @anIndividualInitiative.
+  ///
+  /// In en, this message translates to:
+  /// **'An individual initiative'**
+  String get anIndividualInitiative;
+
+  /// No description provided for @notTheMophAppShort.
+  ///
+  /// In en, this message translates to:
+  /// **'Not the MOPH app and does not replace it'**
+  String get notTheMophAppShort;
+
+  /// No description provided for @officialMophPricesSource.
+  ///
+  /// In en, this message translates to:
+  /// **'Prices from the official MOPH website'**
+  String get officialMophPricesSource;
+
+  /// No description provided for @aiNeverReplacesYourDoctor.
+  ///
+  /// In en, this message translates to:
+  /// **'AI can make mistakes and never replaces your doctor or pharmacist'**
+  String get aiNeverReplacesYourDoctor;
+
+  /// No description provided for @website.
+  ///
+  /// In en, this message translates to:
+  /// **'Website'**
+  String get website;
+
+  /// No description provided for @asthma.
+  ///
+  /// In en, this message translates to:
+  /// **'Asthma'**
+  String get asthma;
+
+  /// No description provided for @copd.
+  ///
+  /// In en, this message translates to:
+  /// **'COPD / chronic lung disease'**
+  String get copd;
+
+  /// No description provided for @cancer.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancer'**
+  String get cancer;
+
+  /// No description provided for @diabetes.
+  ///
+  /// In en, this message translates to:
+  /// **'Diabetes'**
+  String get diabetes;
+
+  /// No description provided for @heartDisease.
+  ///
+  /// In en, this message translates to:
+  /// **'Heart disease'**
+  String get heartDisease;
+
+  /// No description provided for @highBloodPressure.
+  ///
+  /// In en, this message translates to:
+  /// **'High blood pressure'**
+  String get highBloodPressure;
+
+  /// No description provided for @otherCondition.
+  ///
+  /// In en, this message translates to:
+  /// **'Other…'**
+  String get otherCondition;
+
+  /// No description provided for @addAHealthCondition.
+  ///
+  /// In en, this message translates to:
+  /// **'Add a health condition'**
+  String get addAHealthCondition;
+
+  /// No description provided for @conditionNameHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Condition (e.g. epilepsy)'**
+  String get conditionNameHint;
+
+  /// No description provided for @checkWithYourDoctorCondition.
+  ///
+  /// In en, this message translates to:
+  /// **'Check with your doctor: {condition}'**
+  String checkWithYourDoctorCondition(Object condition);
+
+  /// No description provided for @conditionAlertMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'{prefix}{names} is in the group {drugClass}, which {effect}. Do not stop or change a medicine on your own; ask your doctor or pharmacist.'**
+  String conditionAlertMessage(
+      Object prefix, Object names, Object drugClass, Object effect);
+
+  /// No description provided for @healthConditionsToMention.
+  ///
+  /// In en, this message translates to:
+  /// **'Health conditions to mention'**
+  String get healthConditionsToMention;
+
+  /// No description provided for @conditionsReminderMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'{conditions}: PharmaLens cannot check how these medicines affect them. Tell your doctor and pharmacist about them before taking anything new.'**
+  String conditionsReminderMessage(Object conditions);
+
+  /// No description provided for @bmiObesity1.
+  ///
+  /// In en, this message translates to:
+  /// **'Obesity class I'**
+  String get bmiObesity1;
+
+  /// No description provided for @bmiObesity2.
+  ///
+  /// In en, this message translates to:
+  /// **'Obesity class II'**
+  String get bmiObesity2;
+
+  /// No description provided for @bmiObesity3.
+  ///
+  /// In en, this message translates to:
+  /// **'Obesity class III'**
+  String get bmiObesity3;
+
+  /// No description provided for @bmiScale.
+  ///
+  /// In en, this message translates to:
+  /// **'BMI scale'**
+  String get bmiScale;
+
+  /// No description provided for @emergencyNumbers.
+  ///
+  /// In en, this message translates to:
+  /// **'Emergency numbers'**
+  String get emergencyNumbers;
+
+  /// No description provided for @emergencyNumbersSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Tap a number to call it. In a medical emergency, call 140.'**
+  String get emergencyNumbersSubtitle;
+
+  /// No description provided for @redCrossAmbulance.
+  ///
+  /// In en, this message translates to:
+  /// **'Red Cross ambulance'**
+  String get redCrossAmbulance;
+
+  /// No description provided for @civilDefense.
+  ///
+  /// In en, this message translates to:
+  /// **'Civil Defense'**
+  String get civilDefense;
+
+  /// No description provided for @policeIsf.
+  ///
+  /// In en, this message translates to:
+  /// **'Police (ISF)'**
+  String get policeIsf;
+
+  /// No description provided for @fireBrigade.
+  ///
+  /// In en, this message translates to:
+  /// **'Fire brigade'**
+  String get fireBrigade;
+
+  /// No description provided for @embraceLifeline.
+  ///
+  /// In en, this message translates to:
+  /// **'Embrace Lifeline (emotional support)'**
+  String get embraceLifeline;
+
+  /// No description provided for @mophHotline.
+  ///
+  /// In en, this message translates to:
+  /// **'Ministry of Public Health hotline'**
+  String get mophHotline;
+
+  /// No description provided for @callNumber.
+  ///
+  /// In en, this message translates to:
+  /// **'Call {number}'**
+  String callNumber(Object number);
+
+  /// No description provided for @searchPharmaciesByNameOrArea.
+  ///
+  /// In en, this message translates to:
+  /// **'Search pharmacies by name or area'**
+  String get searchPharmaciesByNameOrArea;
+
+  /// No description provided for @resultsForQuery.
+  ///
+  /// In en, this message translates to:
+  /// **'Results for \"{query}\"'**
+  String resultsForQuery(Object query);
+
+  /// No description provided for @noPharmaciesFoundFor.
+  ///
+  /// In en, this message translates to:
+  /// **'No pharmacies found for \"{query}\".'**
+  String noPharmaciesFoundFor(Object query);
+
+  /// No description provided for @beforeYouStart.
+  ///
+  /// In en, this message translates to:
+  /// **'Before you start'**
+  String get beforeYouStart;
+
+  /// No description provided for @aiAcknowledgementBody.
+  ///
+  /// In en, this message translates to:
+  /// **'PharmaLens uses AI to read prescriptions and to summarize medicine information. AI can make mistakes: always check with your pharmacist or doctor before taking, changing or stopping any medicine.'**
+  String get aiAcknowledgementBody;
+
+  /// No description provided for @reportThisAnswer.
+  ///
+  /// In en, this message translates to:
+  /// **'Report this answer'**
+  String get reportThisAnswer;
+
+  /// No description provided for @reportAnAiAnswer.
+  ///
+  /// In en, this message translates to:
+  /// **'Report an AI answer'**
+  String get reportAnAiAnswer;
+
+  /// No description provided for @reportAnswerBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Tell us what is wrong with this answer. Only the AI\'s answer and your reason are sent to the PharmaLens team on WhatsApp; your question and health data are not.'**
+  String get reportAnswerBody;
+
+  /// No description provided for @reportReasonHarmful.
+  ///
+  /// In en, this message translates to:
+  /// **'Harmful or dangerous advice'**
+  String get reportReasonHarmful;
+
+  /// No description provided for @reportReasonWrong.
+  ///
+  /// In en, this message translates to:
+  /// **'Wrong medicine information'**
+  String get reportReasonWrong;
+
+  /// No description provided for @reportReasonOffensive.
+  ///
+  /// In en, this message translates to:
+  /// **'Offensive or inappropriate'**
+  String get reportReasonOffensive;
+
+  /// No description provided for @reportReasonOther.
+  ///
+  /// In en, this message translates to:
+  /// **'Something else'**
+  String get reportReasonOther;
+
+  /// No description provided for @reportDetailsHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Details (optional)'**
+  String get reportDetailsHint;
+
+  /// No description provided for @sendReport.
+  ///
+  /// In en, this message translates to:
+  /// **'Send report'**
+  String get sendReport;
+
+  /// No description provided for @answerReported.
+  ///
+  /// In en, this message translates to:
+  /// **'Reported. Thank you.'**
+  String get answerReported;
+
+  /// No description provided for @reportMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'PharmaLens: AI answer report\nReason: {reason}\nDetails: {details}\n\nAI answer:\n{answer}'**
+  String reportMessage(Object reason, Object details, Object answer);
+
+  /// No description provided for @privacyAndData.
+  ///
+  /// In en, this message translates to:
+  /// **'Privacy and data'**
+  String get privacyAndData;
+
+  /// No description provided for @privacyPolicy.
+  ///
+  /// In en, this message translates to:
+  /// **'Privacy policy'**
+  String get privacyPolicy;
+
+  /// No description provided for @privacyPolicySubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'What stays on your phone and what is sent to Google'**
+  String get privacyPolicySubtitle;
+
+  /// No description provided for @readOnline.
+  ///
+  /// In en, this message translates to:
+  /// **'Read online'**
+  String get readOnline;
+
+  /// No description provided for @deleteAllMyData.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete all my data'**
+  String get deleteAllMyData;
+
+  /// No description provided for @deleteAllMyDataSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Profiles, prescriptions, reminders, dose history and the assistant chat'**
+  String get deleteAllMyDataSubtitle;
+
+  /// No description provided for @deleteAllMyDataQuestion.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete all your data?'**
+  String get deleteAllMyDataQuestion;
+
+  /// No description provided for @deleteAllMyDataBody.
+  ///
+  /// In en, this message translates to:
+  /// **'This removes every health profile, scanned prescription and its photo, reminder, dose history, saved medicine page and the assistant chat from this phone. It cannot be undone.'**
+  String get deleteAllMyDataBody;
+
+  /// No description provided for @allYourDataWasDeleted.
+  ///
+  /// In en, this message translates to:
+  /// **'All your data was deleted.'**
+  String get allYourDataWasDeleted;
 }
 
 class _AppLocalizationsDelegate

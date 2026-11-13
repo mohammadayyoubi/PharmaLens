@@ -392,6 +392,30 @@ or beside it, and very often in Arabic, e.g.
 - Leave writtenInstructions empty only when no directions are written for
   that medicine at all.
 
+COMMON DIRECTION PHRASES (Lebanon). Directions use a small vocabulary; use
+it to read unclear handwriting:
+"على الريق" / "ع الريق" (on an empty stomach), "قبل الأكل", "بعد الأكل",
+"مع الأكل", "بعد كل وجبة", "قبل النوم", "عند النوم", "صباحًا", "ظهرًا",
+"مساءً", "حبة", "حبتين", "نصف حبة", "كبسولة", "ملعقة صغيرة", "ملعقة كبيرة",
+"نقطة", "نقطتين", "بخة", "بختين", "دهن", "مرة باليوم", "مرتين باليوم",
+"٣ مرات باليوم", "كل ٨ ساعات", "كل ١٢ ساعة", "يوميًا", "عند اللزوم",
+"عند الألم", "عند الحرارة", "لمدة ٥ أيام", "لمدة أسبوع", "لمدة شهر",
+"في العين", "في الأذن", "في الأنف", "تحت اللسان", "رجّ قبل الاستعمال".
+
+PLAUSIBILITY CHECK for every direction you output:
+- A direction only says how much, how often, when (time of day, food,
+  sleep), for how long, how (route), or for what symptom (pain, fever...).
+- A word that fits none of these is a misreading. Example: "العفن" (mould)
+  makes no sense in a direction; the strokes are "على الريق" / "ع الريق"
+  (on an empty stomach). Look again at such a word and choose the common
+  phrase whose letter shapes match. Arabic handwriting often drops or moves
+  dots and joins letters, so compare shapes without dots (ع/غ, ر/ز, ب/ت/ث/ن/ي,
+  ف/ق, ح/ج/خ, س/ش, ص/ض, ط/ظ, د/ذ).
+- If you still cannot read it, keep the readable part, write [?] in place
+  of the unclear word, explain it in reasons, and set
+  requiresDoctorConfirmation to true. Never output a word that makes no
+  sense as a direction.
+
 ROUTE RULES:
 
 - Tablet, capsule, syrup, suspension, PO, or oral supports ORAL.
@@ -467,6 +491,12 @@ Rules:
   often on the line under the medicine name) into writtenInstructions as
   written, and into dose / frequency / duration. A directions line belongs
   to the medicine above it and is never a separate medication order.
+- Directions only say how much, how often, when, how long, how or for what
+  symptom. A word that fits none of these is a misreading (e.g. "العفن"
+  is really "على الريق" / "ع الريق", on an empty stomach): read it again
+  against common phrases such as "قبل الأكل", "بعد الأكل", "قبل النوم",
+  "صباحًا ومساءً", "عند اللزوم". If still unclear, write [?] for that word
+  and set requiresDoctorConfirmation to true.
 
 Form rules:
 
@@ -602,7 +632,7 @@ $ocrText
                 'type':
                 'STRING',
                 'description':
-                'All directions written for this medicine, copied exactly in their original language (often Arabic, often on the line under the name). Empty only when none are written.',
+                'All directions written for this medicine, in their original language (often Arabic, often on the line under the name). Every word must make sense as a dosing direction (amount, frequency, timing such as "على الريق" or "بعد الأكل", duration, route, or symptom); re-read any word that does not, and write [?] for a word still unclear. Empty only when none are written.',
               },
               'route':
               <String, dynamic>{

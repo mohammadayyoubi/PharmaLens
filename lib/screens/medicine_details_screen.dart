@@ -16,6 +16,7 @@ import '../services/speech_service.dart';
 import '../utils/atc_groups.dart';
 import '../utils/formatters.dart';
 import '../utils/medicine_equivalence.dart';
+import '../widgets/ai_notice.dart';
 import '../widgets/chatbot_view.dart';
 import '../widgets/reminder_editor.dart';
 import '../widgets/responsive.dart';
@@ -30,6 +31,7 @@ class MedicineDetailsScreen extends StatefulWidget {
     super.key,
     this.result,
     this.medicine,
+    this.profileId,
   }) : assert(
   result != null || medicine != null,
   'Either result or medicine must be provided.',
@@ -37,6 +39,10 @@ class MedicineDetailsScreen extends StatefulWidget {
 
   final VerifiedMedicineResult? result;
   final MedicinePrice? medicine;
+
+  /// Whose prescription this medicine came from (a family member's scan);
+  /// "For you" checks that person. The selected person when null.
+  final String? profileId;
 
   @override
   State<MedicineDetailsScreen> createState() =>
@@ -340,6 +346,7 @@ class _MedicineDetailsScreenState extends State<MedicineDetailsScreen> {
       MaterialPageRoute<void>(
         builder: (_) => MedicineDetailsScreen(
           medicine: medicine,
+          profileId: widget.profileId,
         ),
       ),
     );
@@ -569,6 +576,7 @@ class _MedicineDetailsScreenState extends State<MedicineDetailsScreen> {
         medicine: medicine,
         knowledge: knowledge,
         isArabic: _isArabic,
+        profileId: widget.profileId,
       ),
       const SizedBox(height: 12),
 

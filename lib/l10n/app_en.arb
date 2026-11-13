@@ -213,11 +213,11 @@
   "theImageCouldNotBeOpened": "The image could not be opened. Please try again.",
   "checkedAgainstTheMophList": "CHECKED WITH MOPH",
   "readYourPrescription": "Read your prescription",
-  "takeAPhotoOrUploadOne": "Snap or upload a prescription. We read each medicine, show its official price, cheaper alternatives and how to take it, and warn you about allergies.",
+  "takeAPhotoOrUploadOne": "Snap or upload a prescription: we read each medicine, show its official price and cheaper options, and check your allergies.",
   "takePhoto": "Take photo",
   "opening": "Opening...",
   "uploadImage": "Upload image",
-  "useAClearWellLitPhoto": "Use a clear, well-lit photo of the whole prescription.",
+  "useAClearWellLitPhoto": "Use a clear photo of the whole prescription.",
   "aPhoneReadingAPrescription": "A phone reading a prescription",
   "findAMedicine": "Find a medicine",
   "officialPricesAndAlternatives": "Official prices and alternatives",
@@ -786,7 +786,7 @@
   "fullScreenAlarms": "Full-screen alarms",
   "letsAnAlarmShowTheDose": "Lets an alarm show the dose screen over the lock screen, with Taken and Snooze.",
   "batteryUnrestricted": "Battery: Unrestricted",
-  "somePhonesXiaomiHuaweiOppoSamsung": "Some phones (Xiaomi, Huawei, Oppo, Samsung) stop reminders to save battery. In the app settings, open Battery and choose \"Unrestricted\".",
+  "somePhonesXiaomiHuaweiOppoSamsung": "Some phones (Xiaomi, Huawei, Oppo, Vivo, Tecno, Infinix, Samsung) stop reminders to save battery or after a restart. In the app settings, set Battery to \"Unrestricted\" and turn on \"Autostart\" if your phone has it.",
   "displayOverOtherAppsIsNot": "\"Display over other apps\" is not needed: full-screen alarms already appear over other apps.",
   "skipForNow": "Skip for now",
   "continueText": "Continue",
@@ -814,7 +814,6 @@
   "bmiUnderweight": "Underweight",
   "bmiHealthy": "Healthy weight",
   "bmiOverweight": "Overweight",
-  "bmiObesity": "Obesity",
   "checkWithYourDoctorBeforeUsingIt": "Check with your doctor before using it.",
   "ageYearsOld": "Age {age}",
   "@ageYearsOld": {
@@ -885,5 +884,131 @@
   "anySongOrRecordingOnThis": "Any song or recording on this phone",
   "customSound": "Chosen sound",
   "listen": "Listen",
-  "change": "Change"
+  "change": "Change",
+  "scan": "Scan",
+  "scanAPrescription": "Scan a prescription",
+  "takeAPhotoOrChooseOneFromYourGallery": "Take a photo of the prescription or choose one from your gallery.",
+  "chooseFromGallery": "Choose from gallery",
+  "camera": "Camera",
+  "thisPrescriptionIsFor": "This prescription is for",
+  "forYou": "For you",
+  "forPerson": "For {name}",
+  "@forPerson": {
+    "placeholders": {
+      "name": {}
+    }
+  },
+  "checkedAgainstYourHealthProfile": "Checked against your allergies and health conditions.",
+  "checkedAgainstPersonHealthProfile": "Checked against the allergies and health conditions saved for {name}.",
+  "@checkedAgainstPersonHealthProfile": {
+    "placeholders": {
+      "name": {}
+    }
+  },
+  "noHealthInfoSavedForThisPerson": "No allergies or conditions are saved for this person. Add them in My Health for better checks.",
+  "openMyHealth": "Open My Health",
+  "whoIsThisPrescriptionFor": "Who is this prescription for?",
+  "aiReadingNotice": "Read by AI. AI can make mistakes: check every medicine, dose and direction with your pharmacist or doctor before taking anything.",
+  "aiCanMakeMistakesAskYourPharmacist": "AI can make mistakes. Always ask your pharmacist or doctor.",
+  "directionsAsReadByAi": "Directions as read by AI: confirm them with your pharmacist.",
+  "importantNotice": "Important",
+  "notAnOfficialMophApp": "Not an official MOPH app",
+  "notAnOfficialMophAppBody": "PharmaLens is an individual initiative. It is not the Ministry of Public Health app and does not replace it or any official MOPH platform.",
+  "pricesComeFromTheOfficialMophWebsite": "All medicine prices come from the official price list published on the MOPH website (moph.gov.lb).",
+  "anIndividualInitiative": "An individual initiative",
+  "notTheMophAppShort": "Not the MOPH app and does not replace it",
+  "officialMophPricesSource": "Prices from the official MOPH website",
+  "aiNeverReplacesYourDoctor": "AI can make mistakes and never replaces your doctor or pharmacist",
+  "website": "Website",
+  "asthma": "Asthma",
+  "copd": "COPD / chronic lung disease",
+  "cancer": "Cancer",
+  "diabetes": "Diabetes",
+  "heartDisease": "Heart disease",
+  "highBloodPressure": "High blood pressure",
+  "otherCondition": "Other…",
+  "addAHealthCondition": "Add a health condition",
+  "conditionNameHint": "Condition (e.g. epilepsy)",
+  "checkWithYourDoctorCondition": "Check with your doctor: {condition}",
+  "@checkWithYourDoctorCondition": {
+    "placeholders": {
+      "condition": {}
+    }
+  },
+  "conditionAlertMessage": "{prefix}{names} is in the group {drugClass}, which {effect}. Do not stop or change a medicine on your own; ask your doctor or pharmacist.",
+  "@conditionAlertMessage": {
+    "placeholders": {
+      "prefix": {},
+      "names": {},
+      "drugClass": {},
+      "effect": {}
+    }
+  },
+  "healthConditionsToMention": "Health conditions to mention",
+  "conditionsReminderMessage": "{conditions}: PharmaLens cannot check how these medicines affect them. Tell your doctor and pharmacist about them before taking anything new.",
+  "@conditionsReminderMessage": {
+    "placeholders": {
+      "conditions": {}
+    }
+  },
+  "bmiObesity1": "Obesity class I",
+  "bmiObesity2": "Obesity class II",
+  "bmiObesity3": "Obesity class III",
+  "bmiScale": "BMI scale",
+  "emergencyNumbers": "Emergency numbers",
+  "emergencyNumbersSubtitle": "Tap a number to call it. In a medical emergency, call 140.",
+  "redCrossAmbulance": "Red Cross ambulance",
+  "civilDefense": "Civil Defense",
+  "policeIsf": "Police (ISF)",
+  "fireBrigade": "Fire brigade",
+  "embraceLifeline": "Embrace Lifeline (emotional support)",
+  "mophHotline": "Ministry of Public Health hotline",
+  "callNumber": "Call {number}",
+  "@callNumber": {
+    "placeholders": {
+      "number": {}
+    }
+  },
+  "searchPharmaciesByNameOrArea": "Search pharmacies by name or area",
+  "resultsForQuery": "Results for \"{query}\"",
+  "@resultsForQuery": {
+    "placeholders": {
+      "query": {}
+    }
+  },
+  "noPharmaciesFoundFor": "No pharmacies found for \"{query}\".",
+  "@noPharmaciesFoundFor": {
+    "placeholders": {
+      "query": {}
+    }
+  },
+  "beforeYouStart": "Before you start",
+  "aiAcknowledgementBody": "PharmaLens uses AI to read prescriptions and to summarize medicine information. AI can make mistakes: always check with your pharmacist or doctor before taking, changing or stopping any medicine.",
+  "reportThisAnswer": "Report this answer",
+  "reportAnAiAnswer": "Report an AI answer",
+  "reportAnswerBody": "Tell us what is wrong with this answer. Only the AI's answer and your reason are sent to the PharmaLens team on WhatsApp; your question and health data are not.",
+  "reportReasonHarmful": "Harmful or dangerous advice",
+  "reportReasonWrong": "Wrong medicine information",
+  "reportReasonOffensive": "Offensive or inappropriate",
+  "reportReasonOther": "Something else",
+  "reportDetailsHint": "Details (optional)",
+  "sendReport": "Send report",
+  "answerReported": "Reported. Thank you.",
+  "reportMessage": "PharmaLens: AI answer report\nReason: {reason}\nDetails: {details}\n\nAI answer:\n{answer}",
+  "@reportMessage": {
+    "placeholders": {
+      "reason": {},
+      "details": {},
+      "answer": {}
+    }
+  },
+  "privacyAndData": "Privacy and data",
+  "privacyPolicy": "Privacy policy",
+  "privacyPolicySubtitle": "What stays on your phone and what is sent to Google",
+  "readOnline": "Read online",
+  "deleteAllMyData": "Delete all my data",
+  "deleteAllMyDataSubtitle": "Profiles, prescriptions, reminders, dose history and the assistant chat",
+  "deleteAllMyDataQuestion": "Delete all your data?",
+  "deleteAllMyDataBody": "This removes every health profile, scanned prescription and its photo, reminder, dose history, saved medicine page and the assistant chat from this phone. It cannot be undone.",
+  "allYourDataWasDeleted": "All your data was deleted."
 }

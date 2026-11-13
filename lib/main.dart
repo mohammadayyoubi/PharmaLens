@@ -12,10 +12,12 @@ import 'screens/onboarding_screen.dart';
 import 'services/doctors_service.dart';
 import 'services/dose_log_service.dart';
 import 'services/health_profile_service.dart';
+import 'services/medicine_info_service.dart';
 import 'services/moph_medicine_service.dart';
 import 'services/prescription_history_service.dart';
 import 'services/reminder_service.dart';
 import 'theme/pharmalens_theme.dart';
+import 'widgets/official_notice.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -57,6 +59,17 @@ Future<void> main() async {
     Future<void>.delayed(
       const Duration(seconds: 5),
       DoctorsService().initialize,
+    ),
+  );
+
+  // Older versions kept the medicine information cache in
+  // SharedPreferences, which Android reads in full before the first screen;
+  // it grew with every medicine opened and slowed every launch. It now lives
+  // in files; clear the old entries once the app is up.
+  unawaited(
+    Future<void>.delayed(
+      const Duration(seconds: 8),
+      MedicineInfoService.dropCacheFromPreferences,
     ),
   );
 }
@@ -424,6 +437,8 @@ class _PharmaLensAppState
             ? const AppShell()
             : OnboardingScreen(
           onDone: () {
+            // Onboarding just said all of it; no second notice now.
+            startupNoticeShown = true;
             setState(() {
               _onboarded =
               true;
@@ -449,9 +464,13 @@ class _StartupScreen
       backgroundColor:
       PharmaLensColors.splashBackground,
       body: Center(
+        // Decoded at display size, not the full 1024 px icon.
         child: Image(
-          image: AssetImage(
-            'assets/branding/app_icon.png',
+          image: ResizeImage(
+            AssetImage(
+              'assets/branding/app_icon.png',
+            ),
+            width: 288,
           ),
           width: 96,
           height: 96,

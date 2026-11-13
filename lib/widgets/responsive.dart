@@ -238,6 +238,134 @@ class SurfaceCard extends StatelessWidget {
   }
 }
 
+/// The top of a section page (My Health, Doctors, Medicines): a navy
+/// gradient card with the section's icon, title and subtitle, a back button
+/// when the page was pushed, optional [actions] and an optional [bottom]
+/// (a search field, chips...).
+class GradientPageHeader extends StatelessWidget {
+  const GradientPageHeader({
+    super.key,
+    required this.icon,
+    required this.title,
+    this.subtitle,
+    this.actions = const <Widget>[],
+    this.bottom,
+  });
+
+  final IconData icon;
+  final String title;
+  final String? subtitle;
+  final List<Widget> actions;
+  final Widget? bottom;
+
+  /// A round white-on-glass button for [actions].
+  static Widget action({required IconData icon, required String tooltip, required VoidCallback? onPressed, Widget? child}) {
+    return IconButton(
+      tooltip: tooltip,
+      onPressed: onPressed,
+      style: IconButton.styleFrom(
+        backgroundColor: Colors.white.withValues(alpha: 0.12),
+        foregroundColor: Colors.white,
+        disabledForegroundColor: Colors.white38,
+        side: BorderSide(color: Colors.white.withValues(alpha: 0.18)),
+      ),
+      icon: child ?? Icon(icon),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = PharmaLensTheme.isDark(context);
+    final canPop = Navigator.of(context).canPop();
+
+    return Container(
+      decoration: PharmaLensDecorations.heroCard(borderRadius: BorderRadius.circular(26), isDark: isDark),
+      clipBehavior: Clip.antiAlias,
+      child: Stack(
+        children: [
+          PositionedDirectional(
+            end: -40,
+            top: -60,
+            child: Container(
+              width: 170,
+              height: 170,
+              decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.05), shape: BoxShape.circle),
+            ),
+          ),
+          PositionedDirectional(
+            start: -50,
+            bottom: -90,
+            child: Container(
+              width: 170,
+              height: 170,
+              decoration: BoxDecoration(color: PharmaLensColors.cyan.withValues(alpha: 0.10), shape: BoxShape.circle),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    if (canPop) ...[
+                      action(
+                        icon: Icons.arrow_back_rounded,
+                        tooltip: MaterialLocalizations.of(context).backButtonTooltip,
+                        onPressed: () => Navigator.of(context).maybePop(),
+                        child: const BackButtonIcon(),
+                      ),
+                      const SizedBox(width: 10),
+                    ],
+                    Container(
+                      width: 48,
+                      height: 48,
+                      decoration: BoxDecoration(
+                        gradient: PharmaLensGradients.primary,
+                        borderRadius: BorderRadius.circular(16),
+                        boxShadow: PharmaLensShadows.cyanGlow,
+                      ),
+                      child: Icon(icon, color: Colors.white, size: 25),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Semantics(
+                            header: true,
+                            child: Text(
+                              title,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(color: Colors.white, fontSize: 22, height: 1.15, fontWeight: FontWeight.w900),
+                            ),
+                          ),
+                          if (subtitle != null) ...[
+                            const SizedBox(height: 3),
+                            Text(
+                              subtitle!,
+                              maxLines: 3,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(color: Colors.white.withValues(alpha: 0.75), fontSize: 12.5, height: 1.35, fontWeight: FontWeight.w600),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                    for (final widget in actions) ...[const SizedBox(width: 6), widget],
+                  ],
+                ),
+                if (bottom != null) ...[const SizedBox(height: 14), bottom!],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 /// Back button that only appears when the current navigator can pop, so
 /// screens work both as shell tabs and as pushed pages.
 class AdaptiveBackButton extends StatelessWidget {

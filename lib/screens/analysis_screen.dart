@@ -20,7 +20,9 @@ import '../services/ocr_service.dart';
 import '../services/prescription_history_service.dart';
 import '../services/specialty_context_service.dart';
 import '../theme/pharmalens_theme.dart';
+import '../widgets/ai_notice.dart';
 import '../widgets/chatbot_view.dart';
+import '../widgets/family_member_dialog.dart';
 import '../widgets/label_interactions_card.dart';
 import '../widgets/reminder_editor.dart';
 import '../widgets/responsive.dart';
@@ -33,10 +35,16 @@ class AnalysisScreen extends StatefulWidget {
     super.key,
     required this.imagePath,
     required this.imageBytes,
+    this.profileId,
   });
 
   final String imagePath;
   final Uint8List imageBytes;
+
+  /// The person the prescription is for (see startPrescriptionScan); the
+  /// selected person in My Health when null. Their allergies and health
+  /// conditions are checked, and the scan is saved under them.
+  final String? profileId;
 
   @override
   State<AnalysisScreen> createState() {
@@ -61,6 +69,70 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
 
   /// Id of this scan in the on-device history, once saved.
   String? _historyRecordId;
+
+  late String _profileId =
+      widget.profileId ?? HealthProfileService().active.id;
+
+  /// Whose prescription this is; the owner if they were removed meanwhile.
+  HealthProfile get _person {
+    final profiles = HealthProfileService();
+    return profiles.byId(_profileId) ??
+        profiles.byId(HealthProfileService.ownerId) ??
+        profiles.active;
+  }
+
+  Future<void> _changePerson() async {
+    final isArabic = AppLocalizations.of(context).isArabic;
+    final chosen = await showModalBottomSheet<String>(
+      context: context,
+      useSafeArea: true,
+      builder: (sheetContext) {
+        final palette = PharmaLensTheme.paletteOf(sheetContext);
+        final service = HealthProfileService();
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                appText(isArabic).whoIsThisPrescriptionFor,
+                style: TextStyle(color: palette.textPrimary, fontSize: 18, fontWeight: FontWeight.w900),
+              ),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  for (final profile in service.profiles)
+                    ChoiceChip(
+                      avatar: Icon(profile.isOwner ? Icons.person_rounded : Icons.family_restroom_rounded, size: 18),
+                      label: Text(profile.displayName(isArabic: isArabic)),
+                      selected: profile.id == _person.id,
+                      onSelected: (_) => Navigator.of(sheetContext).pop(profile.id),
+                    ),
+                  ActionChip(
+                    avatar: const Icon(Icons.person_add_alt_1_rounded, size: 18),
+                    label: Text(appText(isArabic).familyMember),
+                    onPressed: () async {
+                      final added = await showAddFamilyMemberDialog(sheetContext, isArabic: isArabic);
+                      if (added != null && sheetContext.mounted) Navigator.of(sheetContext).pop(added.id);
+                    },
+                  ),
+                ],
+              ),
+            ],
+          ),
+        );
+      },
+    );
+    if (chosen == null || chosen == _profileId || !mounted) return;
+    setState(() => _profileId = chosen);
+    final recordId = _historyRecordId;
+    if (recordId != null) {
+      _historyWrite = _historyWrite.then((_) => PrescriptionHistoryService().updateProfile(recordId, chosen));
+    }
+  }
 
   /// Serializes history writes so a quick manual pick cannot create a
   /// second record while the first save is still running.
@@ -1021,7 +1093,7 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
             doctorName: _doctorContext.detectedDoctorName,
             specialty: _doctorContext.detectedSpecialty,
             imageBytes: widget.imageBytes,
-            profileId: HealthProfileService().active.id,
+            profileId: _person.id,
           );
 
           _historyRecordId = record.id;
@@ -1067,6 +1139,7 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
       doseNote: _instructionsFor(
         entry.suggestion,
       ),
+      profileId: _person.id,
     );
   }
 
@@ -1082,6 +1155,7 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
         builder: (_) =>
             MedicineDetailsScreen(
               result: result,
+              profileId: _person.id,
             ),
       ),
     );
@@ -1389,7 +1463,14 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
           },
         ),
         const SizedBox(
-          height: 18,
+          height: 12,
+        ),
+        AiNotice(
+          isArabic: tr.isArabic,
+          message: appText(tr.isArabic).aiReadingNotice,
+        ),
+        const SizedBox(
+          height: 12,
         ),
         ListenableBuilder(
           listenable: HealthProfileService(),
@@ -1397,19 +1478,29 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
               context,
               _,
               ) {
+            final person = _person;
+
             final alerts =
             const MedicationSafetyService().check(
               _confirmedProducts(),
-              allergies: HealthProfileService().allergies,
+              allergies: person.allergies,
+              conditions: person.effectiveConditions,
               possible: _possibleProducts(),
               catalog: MophMedicineService().catalog,
             );
 
             final confirmed = _confirmedProducts();
 
-            if (alerts.isEmpty && confirmed.length < 2) {
-              return const SizedBox.shrink();
-            }
+            // Conditions no rule warned about still need the doctor to know.
+            final warned = MedicationSafetyService.conditionsWithAlerts(alerts);
+            final unchecked = <String>[
+              for (final condition in HealthCondition.values)
+                if (person.conditions.contains(condition) &&
+                    !warned.contains(condition) &&
+                    condition != HealthCondition.child)
+                  condition.label(isArabic: tr.isArabic),
+              ...person.otherConditions,
+            ];
 
             return Padding(
               padding: const EdgeInsets.only(
@@ -1417,6 +1508,27 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
               ),
               child: Column(
                 children: [
+                  Padding(
+                    padding: const EdgeInsets.only(
+                      bottom: 10,
+                    ),
+                    child: _PersonCard(
+                      person: person,
+                      isArabic: tr.isArabic,
+                      onChange: _changePerson,
+                    ),
+                  ),
+                  if (unchecked.isNotEmpty &&
+                      (confirmed.isNotEmpty || _possibleProducts().isNotEmpty))
+                    Padding(
+                      padding: const EdgeInsets.only(
+                        bottom: 10,
+                      ),
+                      child: _ConditionsReminder(
+                        conditions: unchecked,
+                        isArabic: tr.isArabic,
+                      ),
+                    ),
                   if (confirmed.length >= 2)
                     Padding(
                       padding: const EdgeInsets.only(
@@ -1616,6 +1728,22 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
               ),
             ),
           ],
+          const SizedBox(
+            height: 18,
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: 28,
+            ),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(
+                maxWidth: 420,
+              ),
+              child: AiNotice(
+                isArabic: tr.isArabic,
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -1977,6 +2105,117 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
           ),
         );
       },
+    );
+  }
+}
+
+/// Whose prescription this is and what it was checked against, with a
+/// button to pick someone else.
+class _PersonCard extends StatelessWidget {
+  const _PersonCard({required this.person, required this.isArabic, required this.onChange});
+
+  final HealthProfile person;
+  final bool isArabic;
+  final VoidCallback onChange;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = PharmaLensTheme.paletteOf(context);
+    final text = appText(isArabic);
+    final detail = !person.hasHealthInfo
+        ? text.noHealthInfoSavedForThisPerson
+        : person.isOwner
+            ? text.checkedAgainstYourHealthProfile
+            : text.checkedAgainstPersonHealthProfile(person.name);
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 12, 8, 12),
+      decoration: BoxDecoration(
+        color: palette.surface,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: palette.border),
+        boxShadow: palette.cardShadow,
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(color: palette.tealSurface, borderRadius: BorderRadius.circular(13)),
+            child: Icon(
+              person.isOwner ? Icons.person_rounded : Icons.family_restroom_rounded,
+              color: PharmaLensColors.teal,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  person.isOwner ? text.forYou : text.forPerson(person.name),
+                  style: TextStyle(color: palette.textPrimary, fontWeight: FontWeight.w900, fontSize: 15),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  detail,
+                  style: TextStyle(
+                    color: person.hasHealthInfo ? palette.textSecondary : PharmaLensColors.warning,
+                    fontSize: 12,
+                    height: 1.4,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          TextButton(onPressed: onChange, child: Text(text.change)),
+        ],
+      ),
+    );
+  }
+}
+
+/// The person's conditions that no medicine-class rule covered: a reminder
+/// to tell the doctor and pharmacist about them.
+class _ConditionsReminder extends StatelessWidget {
+  const _ConditionsReminder({required this.conditions, required this.isArabic});
+
+  final List<String> conditions;
+  final bool isArabic;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = PharmaLensTheme.paletteOf(context);
+    final text = appText(isArabic);
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: PharmaLensColors.warning.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: PharmaLensColors.warning.withValues(alpha: 0.45)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.monitor_heart_outlined, color: PharmaLensColors.warning),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(text.healthConditionsToMention, style: TextStyle(color: palette.textPrimary, fontWeight: FontWeight.w900)),
+                const SizedBox(height: 4),
+                Text(
+                  text.conditionsReminderMessage(conditions.join(isArabic ? '، ' : ', ')),
+                  style: TextStyle(color: palette.textSecondary, fontSize: 12.5, height: 1.45, fontWeight: FontWeight.w600),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

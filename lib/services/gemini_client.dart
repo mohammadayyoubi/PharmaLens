@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 import '../private/api_keys.dart';
+import 'android_app_identity.dart';
 
 /// Why a Gemini request failed, for user-facing messages.
 enum GeminiErrorKind { notConfigured, rateLimited, timeout, unauthorized, badResponse, unavailable }
@@ -140,6 +141,7 @@ class GeminiClient {
     }
 
     final client = _httpClient ?? http.Client();
+    final appHeaders = await AndroidAppIdentity.headers();
     final stopwatch = Stopwatch()..start();
     var lastKind = GeminiErrorKind.unavailable;
     var lastDetail = '';
@@ -157,7 +159,11 @@ class GeminiClient {
             final response = await client
                 .post(
                   Uri.parse('https://generativelanguage.googleapis.com/v1beta/models/$model:generateContent'),
-                  headers: <String, String>{'Content-Type': 'application/json', 'x-goog-api-key': keys[keyIndex]},
+                  headers: <String, String>{
+                    'Content-Type': 'application/json',
+                    'x-goog-api-key': keys[keyIndex],
+                    ...appHeaders,
+                  },
                   body: jsonEncode(body(model)),
                 )
                 .timeout(remaining < requestTimeout ? remaining : requestTimeout);

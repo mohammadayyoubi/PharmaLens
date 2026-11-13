@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
+import 'dart:io' hide BytesBuilder;
+import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart' show sha256;
 import 'package:flutter/foundation.dart';
@@ -595,8 +596,10 @@ class MophMedicineService {
     });
   }
 
-  /// Downloads [uri], reporting progress between [from] and [to].
-  Future<List<int>> _download(Uri uri, Duration timeout, double from, double to) async {
+  /// Downloads [uri], reporting progress between [from] and [to]. Bytes are
+  /// collected in a `BytesBuilder`: a `List<int>` of a 3 MB file is 3 million
+  /// boxed entries (about 24 MB) built on the UI thread.
+  Future<Uint8List> _download(Uri uri, Duration timeout, double from, double to) async {
     final client = http.Client();
     try {
       final request = http.Request('GET', uri);
@@ -609,12 +612,12 @@ class MophMedicineService {
       }
 
       final total = response.contentLength ?? 0;
-      final bytes = <int>[];
+      final bytes = BytesBuilder(copy: false);
       await response.stream.timeout(timeout).forEach((chunk) {
-        bytes.addAll(chunk);
+        bytes.add(chunk);
         if (total > 0) _report(MophSyncStage.downloading, from + (to - from) * bytes.length / total);
       });
-      return bytes;
+      return bytes.takeBytes();
     } finally {
       client.close();
     }
@@ -665,14 +668,15 @@ class MophMedicineService {
       final csvBytes = await _download(Uri.parse('${base}lebanon_medicine_prices.csv'), const Duration(seconds: 90), 0.1, 0.8);
 
       // The manifest's checksum proves the file is the one the workflow
-      // published, complete and unchanged.
+      // published, complete and unchanged. Hashing, decoding and parsing
+      // 3 MB run in a background isolate so scrolling does not stutter.
       _report(MophSyncStage.verifying, 0.82);
-      if (remote.sha256.isNotEmpty && sha256.convert(csvBytes).toString() != remote.sha256) {
+      final checked = await compute(verifyAndParseMophCsv, (csvBytes, remote.sha256));
+      if (checked == null) {
         return result(MophSyncStatus.failed, 'The downloaded list does not match its checksum.');
       }
 
-      final body = utf8.decode(csvBytes);
-      final dataset = await compute(parseMophDataset, body);
+      final (body, dataset) = checked;
       // A partial download or a file from another build must not replace a
       // complete list.
       if (!remote.matches(dataset)) {
@@ -957,6 +961,16 @@ class MophDataset {
 ///
 /// Rows are keyed by MOPH code, so every strength and pack of a brand is kept.
 /// Top-level so it can run in a background isolate via [compute].
+/// For a downloaded list (run with `compute`): checks [input].$2, the
+/// SHA-256 from the manifest (skipped when empty), then decodes and parses.
+/// Null when the checksum does not match.
+(String, MophDataset)? verifyAndParseMophCsv((Uint8List, String) input) {
+  final (bytes, expected) = input;
+  if (expected.isNotEmpty && sha256.convert(bytes).toString() != expected) return null;
+  final body = utf8.decode(bytes);
+  return (body, parseMophDataset(body));
+}
+
 MophDataset parseMophDataset(String csvContent) {
   final lines = const LineSplitter().convert(csvContent);
   if (lines.isEmpty) return const MophDataset(medicines: <MedicinePrice>[], listDate: '');

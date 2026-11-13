@@ -533,7 +533,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get takeAPhotoOrUploadOne =>
-      'Snap or upload a prescription. We read each medicine, show its official price, cheaper alternatives and how to take it, and warn you about allergies.';
+      'Snap or upload a prescription: we read each medicine, show its official price and cheaper options, and check your allergies.';
 
   @override
   String get takePhoto => 'Take photo';
@@ -546,7 +546,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get useAClearWellLitPhoto =>
-      'Use a clear, well-lit photo of the whole prescription.';
+      'Use a clear photo of the whole prescription.';
 
   @override
   String get aPhoneReadingAPrescription => 'A phone reading a prescription';
@@ -1864,7 +1864,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get somePhonesXiaomiHuaweiOppoSamsung =>
-      'Some phones (Xiaomi, Huawei, Oppo, Samsung) stop reminders to save battery. In the app settings, open Battery and choose \"Unrestricted\".';
+      'Some phones (Xiaomi, Huawei, Oppo, Vivo, Tecno, Infinix, Samsung) stop reminders to save battery or after a restart. In the app settings, set Battery to \"Unrestricted\" and turn on \"Autostart\" if your phone has it.';
 
   @override
   String get displayOverOtherAppsIsNot =>
@@ -1920,9 +1920,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get bmiOverweight => 'Overweight';
-
-  @override
-  String get bmiObesity => 'Obesity';
 
   @override
   String get checkWithYourDoctorBeforeUsingIt =>
@@ -2022,4 +2019,268 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get change => 'Change';
+
+  @override
+  String get scan => 'Scan';
+
+  @override
+  String get scanAPrescription => 'Scan a prescription';
+
+  @override
+  String get takeAPhotoOrChooseOneFromYourGallery =>
+      'Take a photo of the prescription or choose one from your gallery.';
+
+  @override
+  String get chooseFromGallery => 'Choose from gallery';
+
+  @override
+  String get camera => 'Camera';
+
+  @override
+  String get thisPrescriptionIsFor => 'This prescription is for';
+
+  @override
+  String get forYou => 'For you';
+
+  @override
+  String forPerson(Object name) {
+    return 'For $name';
+  }
+
+  @override
+  String get checkedAgainstYourHealthProfile =>
+      'Checked against your allergies and health conditions.';
+
+  @override
+  String checkedAgainstPersonHealthProfile(Object name) {
+    return 'Checked against the allergies and health conditions saved for $name.';
+  }
+
+  @override
+  String get noHealthInfoSavedForThisPerson =>
+      'No allergies or conditions are saved for this person. Add them in My Health for better checks.';
+
+  @override
+  String get openMyHealth => 'Open My Health';
+
+  @override
+  String get whoIsThisPrescriptionFor => 'Who is this prescription for?';
+
+  @override
+  String get aiReadingNotice =>
+      'Read by AI. AI can make mistakes: check every medicine, dose and direction with your pharmacist or doctor before taking anything.';
+
+  @override
+  String get aiCanMakeMistakesAskYourPharmacist =>
+      'AI can make mistakes. Always ask your pharmacist or doctor.';
+
+  @override
+  String get directionsAsReadByAi =>
+      'Directions as read by AI: confirm them with your pharmacist.';
+
+  @override
+  String get importantNotice => 'Important';
+
+  @override
+  String get notAnOfficialMophApp => 'Not an official MOPH app';
+
+  @override
+  String get notAnOfficialMophAppBody =>
+      'PharmaLens is an individual initiative. It is not the Ministry of Public Health app and does not replace it or any official MOPH platform.';
+
+  @override
+  String get pricesComeFromTheOfficialMophWebsite =>
+      'All medicine prices come from the official price list published on the MOPH website (moph.gov.lb).';
+
+  @override
+  String get anIndividualInitiative => 'An individual initiative';
+
+  @override
+  String get notTheMophAppShort => 'Not the MOPH app and does not replace it';
+
+  @override
+  String get officialMophPricesSource =>
+      'Prices from the official MOPH website';
+
+  @override
+  String get aiNeverReplacesYourDoctor =>
+      'AI can make mistakes and never replaces your doctor or pharmacist';
+
+  @override
+  String get website => 'Website';
+
+  @override
+  String get asthma => 'Asthma';
+
+  @override
+  String get copd => 'COPD / chronic lung disease';
+
+  @override
+  String get cancer => 'Cancer';
+
+  @override
+  String get diabetes => 'Diabetes';
+
+  @override
+  String get heartDisease => 'Heart disease';
+
+  @override
+  String get highBloodPressure => 'High blood pressure';
+
+  @override
+  String get otherCondition => 'Other…';
+
+  @override
+  String get addAHealthCondition => 'Add a health condition';
+
+  @override
+  String get conditionNameHint => 'Condition (e.g. epilepsy)';
+
+  @override
+  String checkWithYourDoctorCondition(Object condition) {
+    return 'Check with your doctor: $condition';
+  }
+
+  @override
+  String conditionAlertMessage(
+      Object prefix, Object names, Object drugClass, Object effect) {
+    return '$prefix$names is in the group $drugClass, which $effect. Do not stop or change a medicine on your own; ask your doctor or pharmacist.';
+  }
+
+  @override
+  String get healthConditionsToMention => 'Health conditions to mention';
+
+  @override
+  String conditionsReminderMessage(Object conditions) {
+    return '$conditions: PharmaLens cannot check how these medicines affect them. Tell your doctor and pharmacist about them before taking anything new.';
+  }
+
+  @override
+  String get bmiObesity1 => 'Obesity class I';
+
+  @override
+  String get bmiObesity2 => 'Obesity class II';
+
+  @override
+  String get bmiObesity3 => 'Obesity class III';
+
+  @override
+  String get bmiScale => 'BMI scale';
+
+  @override
+  String get emergencyNumbers => 'Emergency numbers';
+
+  @override
+  String get emergencyNumbersSubtitle =>
+      'Tap a number to call it. In a medical emergency, call 140.';
+
+  @override
+  String get redCrossAmbulance => 'Red Cross ambulance';
+
+  @override
+  String get civilDefense => 'Civil Defense';
+
+  @override
+  String get policeIsf => 'Police (ISF)';
+
+  @override
+  String get fireBrigade => 'Fire brigade';
+
+  @override
+  String get embraceLifeline => 'Embrace Lifeline (emotional support)';
+
+  @override
+  String get mophHotline => 'Ministry of Public Health hotline';
+
+  @override
+  String callNumber(Object number) {
+    return 'Call $number';
+  }
+
+  @override
+  String get searchPharmaciesByNameOrArea =>
+      'Search pharmacies by name or area';
+
+  @override
+  String resultsForQuery(Object query) {
+    return 'Results for \"$query\"';
+  }
+
+  @override
+  String noPharmaciesFoundFor(Object query) {
+    return 'No pharmacies found for \"$query\".';
+  }
+
+  @override
+  String get beforeYouStart => 'Before you start';
+
+  @override
+  String get aiAcknowledgementBody =>
+      'PharmaLens uses AI to read prescriptions and to summarize medicine information. AI can make mistakes: always check with your pharmacist or doctor before taking, changing or stopping any medicine.';
+
+  @override
+  String get reportThisAnswer => 'Report this answer';
+
+  @override
+  String get reportAnAiAnswer => 'Report an AI answer';
+
+  @override
+  String get reportAnswerBody =>
+      'Tell us what is wrong with this answer. Only the AI\'s answer and your reason are sent to the PharmaLens team on WhatsApp; your question and health data are not.';
+
+  @override
+  String get reportReasonHarmful => 'Harmful or dangerous advice';
+
+  @override
+  String get reportReasonWrong => 'Wrong medicine information';
+
+  @override
+  String get reportReasonOffensive => 'Offensive or inappropriate';
+
+  @override
+  String get reportReasonOther => 'Something else';
+
+  @override
+  String get reportDetailsHint => 'Details (optional)';
+
+  @override
+  String get sendReport => 'Send report';
+
+  @override
+  String get answerReported => 'Reported. Thank you.';
+
+  @override
+  String reportMessage(Object reason, Object details, Object answer) {
+    return 'PharmaLens: AI answer report\nReason: $reason\nDetails: $details\n\nAI answer:\n$answer';
+  }
+
+  @override
+  String get privacyAndData => 'Privacy and data';
+
+  @override
+  String get privacyPolicy => 'Privacy policy';
+
+  @override
+  String get privacyPolicySubtitle =>
+      'What stays on your phone and what is sent to Google';
+
+  @override
+  String get readOnline => 'Read online';
+
+  @override
+  String get deleteAllMyData => 'Delete all my data';
+
+  @override
+  String get deleteAllMyDataSubtitle =>
+      'Profiles, prescriptions, reminders, dose history and the assistant chat';
+
+  @override
+  String get deleteAllMyDataQuestion => 'Delete all your data?';
+
+  @override
+  String get deleteAllMyDataBody =>
+      'This removes every health profile, scanned prescription and its photo, reminder, dose history, saved medicine page and the assistant chat from this phone. It cannot be undone.';
+
+  @override
+  String get allYourDataWasDeleted => 'All your data was deleted.';
 }

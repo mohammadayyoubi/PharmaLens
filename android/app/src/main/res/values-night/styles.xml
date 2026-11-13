@@ -11,8 +11,11 @@
          Flutter UI initializes, as well as behind your Flutter UI while its
          running.
 
-         This Theme is only used starting with V2 of Flutter's Android embedding. -->
-    <style name="NormalTheme" parent="@android:style/Theme.Black.NoTitleBar">
+         This Theme is only used starting with V2 of Flutter's Android embedding.
+         Light even in dark mode: the app opens in light mode until the user
+         picks another theme in Settings, so a black window here flashed
+         behind it. -->
+    <style name="NormalTheme" parent="@android:style/Theme.Light.NoTitleBar">
         <item name="android:windowBackground">?android:colorBackground</item>
     </style>
 </resources>

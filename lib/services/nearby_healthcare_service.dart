@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 
 import '../models/nearby_healthcare_place.dart';
 import '../private/google_maps_private_config.dart';
+import 'android_app_identity.dart';
 
 enum NearbyHealthcareErrorCode {
   invalidLocation,
@@ -102,13 +103,96 @@ class NearbyHealthcareService {
       }
     }
 
+    final places = await _request(_endpoint, <String, dynamic>{
+      'includedTypes': <String>[
+        'pharmacy',
+      ],
+
+      'maxResultCount': safeMaxResults,
+
+      'rankPreference': 'DISTANCE',
+
+      'languageCode': safeLanguageCode,
+
+      'regionCode': 'LB',
+
+      'locationRestriction': <String, dynamic>{
+        'circle': <String, dynamic>{
+          'center': <String, dynamic>{
+            'latitude': latitude,
+            'longitude': longitude,
+          },
+          'radius': safeRadius,
+        },
+      },
+    });
+
+    final immutable = List<NearbyHealthcarePlace>.unmodifiable(places);
+
+    _cachedPlaces = immutable;
+
+    _cachedAt = DateTime.now();
+
+    _cachedLocationKey = cacheKey;
+
+    return immutable;
+  }
+
+  /// Pharmacies matching [query] (a name or an area, e.g. "Hamra" or
+  /// "Mazen pharmacy"), anywhere in Lebanon, ranked near [latitude] /
+  /// [longitude] when given. Not cached.
+  Future<List<NearbyHealthcarePlace>> searchPharmacies({
+    required String query,
+    required String languageCode,
+    double? latitude,
+    double? longitude,
+    int maxResults = 15,
+  }) async {
+    final text = query.trim();
+    if (text.isEmpty) return const <NearbyHealthcarePlace>[];
+
+    if (!GoogleMapsPrivateConfig.hasValidPlacesApiKey) {
+      throw const NearbyHealthcareException(
+        code: NearbyHealthcareErrorCode.configuration,
+        message: 'Nearby healthcare search is not configured.',
+        retryable: false,
+      );
+    }
+
+    final located = latitude != null && longitude != null && _coordinatesAreValid(latitude, longitude);
+
+    final places = await _request(_searchEndpoint, <String, dynamic>{
+      'textQuery': text,
+      'includedType': 'pharmacy',
+      'strictTypeFiltering': true,
+      'maxResultCount': maxResults.clamp(1, 20).toInt(),
+      'languageCode': languageCode.trim().toLowerCase() == 'ar' ? 'ar' : 'en',
+      'regionCode': 'LB',
+      if (located)
+        'locationBias': <String, dynamic>{
+          'circle': <String, dynamic>{
+            'center': <String, dynamic>{'latitude': latitude, 'longitude': longitude},
+            'radius': 50000.0,
+          },
+        },
+    });
+
+    return List<NearbyHealthcarePlace>.unmodifiable(places);
+  }
+
+  static const String _searchEndpoint = 'https://places.googleapis.com/v1/places:searchText';
+
+  /// Posts a Places API (New) request and parses the pharmacies it returns.
+  Future<List<NearbyHealthcarePlace>> _request(String endpoint, Map<String, dynamic> body) async {
     http.Response response;
+    final appHeaders = await AndroidAppIdentity.headers();
 
     try {
       response = await _httpClient
           .post(
-            Uri.parse(_endpoint),
+            Uri.parse(endpoint),
             headers: <String, String>{
+              ...appHeaders,
               'Content-Type': 'application/json',
               'X-Goog-Api-Key': GoogleMapsPrivateConfig.googlePlacesApiKey,
               'X-Goog-FieldMask': <String>[
@@ -127,29 +211,7 @@ class NearbyHealthcareService {
                 'places.userRatingCount',
               ].join(','),
             },
-            body: jsonEncode(<String, dynamic>{
-              'includedTypes': <String>[
-                'pharmacy',
-              ],
-
-              'maxResultCount': safeMaxResults,
-
-              'rankPreference': 'DISTANCE',
-
-              'languageCode': safeLanguageCode,
-
-              'regionCode': 'LB',
-
-              'locationRestriction': <String, dynamic>{
-                'circle': <String, dynamic>{
-                  'center': <String, dynamic>{
-                    'latitude': latitude,
-                    'longitude': longitude,
-                  },
-                  'radius': safeRadius,
-                },
-              },
-            }),
+            body: jsonEncode(body),
           )
           .timeout(_requestTimeout);
     } on TimeoutException catch (error, stackTrace) {
@@ -174,17 +236,7 @@ class NearbyHealthcareService {
       throw _httpException(response.statusCode);
     }
 
-    final places = _parsePlaces(response.body);
-
-    final immutable = List<NearbyHealthcarePlace>.unmodifiable(places);
-
-    _cachedPlaces = immutable;
-
-    _cachedAt = DateTime.now();
-
-    _cachedLocationKey = cacheKey;
-
-    return immutable;
+    return _parsePlaces(response.body);
   }
 
   List<NearbyHealthcarePlace> _parsePlaces(String body) {

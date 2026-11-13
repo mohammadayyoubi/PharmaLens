@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../private/google_maps_private_config.dart';
+import 'android_app_identity.dart';
 
 /// Public contact details of a hospital, from Google Places.
 class HospitalContact {
@@ -95,10 +96,12 @@ class HospitalContactService {
           ? '$name, Lebanon'
           : '$name Hospital, Lebanon';
 
+      final appHeaders = await AndroidAppIdentity.headers();
       final response = await http
           .post(
             Uri.parse(_endpoint),
             headers: <String, String>{
+              ...appHeaders,
               'Content-Type': 'application/json',
               'X-Goog-Api-Key': GoogleMapsPrivateConfig.googlePlacesApiKey,
               'X-Goog-FieldMask': 'places.displayName,places.formattedAddress,places.location,'

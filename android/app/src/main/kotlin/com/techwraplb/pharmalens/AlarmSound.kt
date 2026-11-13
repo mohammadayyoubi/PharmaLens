@@ -1,4 +1,4 @@
-package com.codepeakstudio.pharmalens
+package com.techwraplb.pharmalens
 
 import android.app.Activity
 import android.content.ContentValues

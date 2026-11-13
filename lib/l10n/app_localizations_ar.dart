@@ -1838,7 +1838,7 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get somePhonesXiaomiHuaweiOppoSamsung =>
-      'بعض الهواتف (شاومي، هواوي، أوبو، سامسونغ) توقف التذكيرات لتوفير البطارية. في إعدادات التطبيق افتح البطارية واختر \"بلا قيود\".';
+      'بعض الهواتف (شاومي، هواوي، أوبو، فيفو، تكنو، إنفينكس، سامسونغ) توقف التذكيرات لتوفير البطارية أو بعد إعادة التشغيل. في إعدادات التطبيق اجعل البطارية \"بلا قيود\" وفعّل \"التشغيل التلقائي\" إن وُجد في هاتفك.';
 
   @override
   String get displayOverOtherAppsIsNot =>
@@ -1894,9 +1894,6 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get bmiOverweight => 'زيادة في الوزن';
-
-  @override
-  String get bmiObesity => 'سمنة';
 
   @override
   String get checkWithYourDoctorBeforeUsingIt => 'استشر طبيبك قبل استعماله.';
@@ -1994,4 +1991,266 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get change => 'تغيير';
+
+  @override
+  String get scan => 'مسح';
+
+  @override
+  String get scanAPrescription => 'امسح وصفة طبية';
+
+  @override
+  String get takeAPhotoOrChooseOneFromYourGallery =>
+      'التقط صورة للوصفة أو اختر صورة من المعرض.';
+
+  @override
+  String get chooseFromGallery => 'اختر من المعرض';
+
+  @override
+  String get camera => 'الكاميرا';
+
+  @override
+  String get thisPrescriptionIsFor => 'هذه الوصفة لـ';
+
+  @override
+  String get forYou => 'لك';
+
+  @override
+  String forPerson(Object name) {
+    return 'لـ$name';
+  }
+
+  @override
+  String get checkedAgainstYourHealthProfile =>
+      'تمت المقارنة مع حساسيتك وحالاتك الصحية.';
+
+  @override
+  String checkedAgainstPersonHealthProfile(Object name) {
+    return 'تمت المقارنة مع الحساسية والحالات الصحية المحفوظة لـ$name.';
+  }
+
+  @override
+  String get noHealthInfoSavedForThisPerson =>
+      'لا توجد حساسية أو حالات صحية محفوظة لهذا الشخص. أضفها في «صحتي» لفحص أدق.';
+
+  @override
+  String get openMyHealth => 'افتح صحتي';
+
+  @override
+  String get whoIsThisPrescriptionFor => 'لمن هذه الوصفة؟';
+
+  @override
+  String get aiReadingNotice =>
+      'قرأها الذكاء الاصطناعي وقد يخطئ: راجع كل دواء وجرعة وطريقة استعمال مع الصيدلي أو الطبيب قبل تناول أي شيء.';
+
+  @override
+  String get aiCanMakeMistakesAskYourPharmacist =>
+      'قد يخطئ الذكاء الاصطناعي. اسأل الصيدلي أو الطبيب دائمًا.';
+
+  @override
+  String get directionsAsReadByAi =>
+      'طريقة الاستعمال كما قرأها الذكاء الاصطناعي: تأكد منها مع الصيدلي.';
+
+  @override
+  String get importantNotice => 'تنبيه مهم';
+
+  @override
+  String get notAnOfficialMophApp => 'ليس تطبيقًا رسميًا لوزارة الصحة';
+
+  @override
+  String get notAnOfficialMophAppBody =>
+      'فارما لينس مبادرة فردية. هو ليس تطبيق وزارة الصحة العامة ولا يحلّ محلّه أو محلّ أي منصة رسمية للوزارة.';
+
+  @override
+  String get pricesComeFromTheOfficialMophWebsite =>
+      'جميع أسعار الأدوية مأخوذة من اللائحة الرسمية المنشورة على موقع وزارة الصحة العامة (moph.gov.lb).';
+
+  @override
+  String get anIndividualInitiative => 'مبادرة فردية';
+
+  @override
+  String get notTheMophAppShort => 'ليس تطبيق وزارة الصحة ولا يحلّ محلّه';
+
+  @override
+  String get officialMophPricesSource =>
+      'الأسعار من الموقع الرسمي لوزارة الصحة';
+
+  @override
+  String get aiNeverReplacesYourDoctor =>
+      'قد يخطئ الذكاء الاصطناعي ولا يحلّ أبدًا محلّ الطبيب أو الصيدلي';
+
+  @override
+  String get website => 'الموقع الإلكتروني';
+
+  @override
+  String get asthma => 'الربو';
+
+  @override
+  String get copd => 'انسداد رئوي مزمن / مرض رئوي';
+
+  @override
+  String get cancer => 'السرطان';
+
+  @override
+  String get diabetes => 'السكري';
+
+  @override
+  String get heartDisease => 'مرض في القلب';
+
+  @override
+  String get highBloodPressure => 'ارتفاع ضغط الدم';
+
+  @override
+  String get otherCondition => 'أخرى…';
+
+  @override
+  String get addAHealthCondition => 'إضافة حالة صحية';
+
+  @override
+  String get conditionNameHint => 'الحالة (مثلًا: الصرع)';
+
+  @override
+  String checkWithYourDoctorCondition(Object condition) {
+    return 'استشر طبيبك: $condition';
+  }
+
+  @override
+  String conditionAlertMessage(
+      Object prefix, Object names, Object drugClass, Object effect) {
+    return '$prefix$names من مجموعة $drugClass، وهي $effect. لا توقف أي دواء ولا تغيّره من تلقاء نفسك؛ اسأل طبيبك أو الصيدلي.';
+  }
+
+  @override
+  String get healthConditionsToMention => 'حالات صحية يجب ذكرها';
+
+  @override
+  String conditionsReminderMessage(Object conditions) {
+    return '$conditions: لا يستطيع فارما لينس التحقق من تأثير هذه الأدوية عليها. أخبر طبيبك والصيدلي بها قبل تناول أي دواء جديد.';
+  }
+
+  @override
+  String get bmiObesity1 => 'سمنة من الدرجة الأولى';
+
+  @override
+  String get bmiObesity2 => 'سمنة من الدرجة الثانية';
+
+  @override
+  String get bmiObesity3 => 'سمنة من الدرجة الثالثة';
+
+  @override
+  String get bmiScale => 'مقياس مؤشر كتلة الجسم';
+
+  @override
+  String get emergencyNumbers => 'أرقام الطوارئ';
+
+  @override
+  String get emergencyNumbersSubtitle =>
+      'اضغط على الرقم للاتصال. في حالة طارئة طبية اتصل بالرقم 140.';
+
+  @override
+  String get redCrossAmbulance => 'إسعاف الصليب الأحمر';
+
+  @override
+  String get civilDefense => 'الدفاع المدني';
+
+  @override
+  String get policeIsf => 'الشرطة (قوى الأمن الداخلي)';
+
+  @override
+  String get fireBrigade => 'الإطفاء';
+
+  @override
+  String get embraceLifeline => 'خط الحياة Embrace (دعم نفسي)';
+
+  @override
+  String get mophHotline => 'الخط الساخن لوزارة الصحة العامة';
+
+  @override
+  String callNumber(Object number) {
+    return 'اتصل بـ$number';
+  }
+
+  @override
+  String get searchPharmaciesByNameOrArea => 'ابحث عن صيدلية بالاسم أو المنطقة';
+
+  @override
+  String resultsForQuery(Object query) {
+    return 'نتائج «$query»';
+  }
+
+  @override
+  String noPharmaciesFoundFor(Object query) {
+    return 'لم يتم العثور على صيدليات لـ«$query».';
+  }
+
+  @override
+  String get beforeYouStart => 'قبل أن تبدأ';
+
+  @override
+  String get aiAcknowledgementBody =>
+      'يستخدم فارما لينس الذكاء الاصطناعي لقراءة الوصفات وتلخيص معلومات الأدوية. قد يخطئ الذكاء الاصطناعي: تحقق دائمًا مع الصيدلي أو الطبيب قبل تناول أي دواء أو تغييره أو إيقافه.';
+
+  @override
+  String get reportThisAnswer => 'الإبلاغ عن هذه الإجابة';
+
+  @override
+  String get reportAnAiAnswer => 'الإبلاغ عن إجابة الذكاء الاصطناعي';
+
+  @override
+  String get reportAnswerBody =>
+      'أخبرنا بما هو خاطئ في هذه الإجابة. تُرسل إجابة الذكاء الاصطناعي وسبب البلاغ فقط إلى فريق فارما لينس عبر واتساب، ولا يُرسل سؤالك ولا بياناتك الصحية.';
+
+  @override
+  String get reportReasonHarmful => 'نصيحة ضارة أو خطيرة';
+
+  @override
+  String get reportReasonWrong => 'معلومات دوائية خاطئة';
+
+  @override
+  String get reportReasonOffensive => 'محتوى مسيء أو غير لائق';
+
+  @override
+  String get reportReasonOther => 'سبب آخر';
+
+  @override
+  String get reportDetailsHint => 'تفاصيل (اختياري)';
+
+  @override
+  String get sendReport => 'إرسال البلاغ';
+
+  @override
+  String get answerReported => 'تم الإبلاغ. شكرًا لك.';
+
+  @override
+  String reportMessage(Object reason, Object details, Object answer) {
+    return 'فارما لينس: بلاغ عن إجابة الذكاء الاصطناعي\nالسبب: $reason\nالتفاصيل: $details\n\nإجابة الذكاء الاصطناعي:\n$answer';
+  }
+
+  @override
+  String get privacyAndData => 'الخصوصية والبيانات';
+
+  @override
+  String get privacyPolicy => 'سياسة الخصوصية';
+
+  @override
+  String get privacyPolicySubtitle => 'ما يبقى على هاتفك وما يُرسل إلى Google';
+
+  @override
+  String get readOnline => 'اقرأها على الإنترنت';
+
+  @override
+  String get deleteAllMyData => 'حذف جميع بياناتي';
+
+  @override
+  String get deleteAllMyDataSubtitle =>
+      'الملفات الصحية والوصفات والتذكيرات وسجل الجرعات ومحادثة المساعد';
+
+  @override
+  String get deleteAllMyDataQuestion => 'حذف جميع بياناتك؟';
+
+  @override
+  String get deleteAllMyDataBody =>
+      'سيؤدي ذلك إلى حذف كل الملفات الصحية والوصفات الممسوحة وصورها والتذكيرات وسجل الجرعات وصفحات الأدوية المحفوظة ومحادثة المساعد من هذا الهاتف. لا يمكن التراجع عن ذلك.';
+
+  @override
+  String get allYourDataWasDeleted => 'تم حذف جميع بياناتك.';
 }

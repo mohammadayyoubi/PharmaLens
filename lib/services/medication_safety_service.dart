@@ -1,8 +1,15 @@
+import 'package:flutter/foundation.dart';
+
 import '../l10n/app_text.dart';
 import '../models/medicine_price.dart';
 import '../utils/medicine_equivalence.dart';
+import 'health_profile_service.dart';
 
 enum SafetyAlertType {
+  /// A product's class (ATC) is known to affect one of the person's health
+  /// conditions, e.g. a beta blocker for someone with asthma.
+  condition,
+
   /// A prescribed product contains something on the user's allergy list.
   allergy,
 
@@ -24,12 +31,17 @@ class SafetyAlert {
     required this.subjectEn,
     required this.subjectAr,
     this.uncertain = false,
+    this.condition,
+    this.drugClassEn = '',
+    this.drugClassAr = '',
+    this.effectEn = '',
+    this.effectAr = '',
   });
 
   final SafetyAlertType type;
   final List<String> medicines;
 
-  /// The ingredient, allergy or class the alert is about.
+  /// The ingredient, allergy, class or health condition the alert is about.
   final String subjectEn;
   final String subjectAr;
 
@@ -37,10 +49,20 @@ class SafetyAlert {
   /// line, so the alert applies only if that is the right product.
   final bool uncertain;
 
+  /// For [SafetyAlertType.condition]: the condition, the medicines' group
+  /// and what that group can do to the condition.
+  final HealthCondition? condition;
+  final String drugClassEn;
+  final String drugClassAr;
+  final String effectEn;
+  final String effectAr;
+
   bool get isHighPriority => type != SafetyAlertType.sameClass;
 
   String title({required bool isArabic}) {
     switch (type) {
+      case SafetyAlertType.condition:
+        return appText(isArabic).checkWithYourDoctorCondition(isArabic ? subjectAr : subjectEn);
       case SafetyAlertType.allergy:
         return isArabic ? 'تنبيه حساسية: $subjectAr' : 'Allergy alert: $subjectEn';
       case SafetyAlertType.relatedAllergy:
@@ -58,6 +80,13 @@ class SafetyAlert {
         ? (appText(isArabic).ifThisLineIs(names))
         : '';
     switch (type) {
+      case SafetyAlertType.condition:
+        return appText(isArabic).conditionAlertMessage(
+          prefix,
+          names,
+          isArabic ? drugClassAr : drugClassEn,
+          isArabic ? effectAr : effectEn,
+        );
       case SafetyAlertType.allergy:
         return appText(isArabic).mayContainSomethingOnYourAllergy(prefix, names);
       case SafetyAlertType.relatedAllergy:
@@ -115,6 +144,69 @@ class MedicationSafetyService {
     'opioid': (['N02A', 'R05DA'], 'Opioids', 'المسكنات الأفيونية'),
     'codeine': (['R05DA04', 'N02AJ'], 'Codeine', 'الكودايين'),
   };
+
+  /// Medicine groups (ATC prefixes) with a well-known effect on a health
+  /// condition. Each entry: condition, ATC prefixes, group name and what
+  /// the group can do (completing "which ..."). Cautions only: the alert
+  /// sends the user to their doctor and never says a medicine is unsafe or
+  /// safe for them.
+  static const List<(HealthCondition, List<String>, String, String, String, String)> _conditionRules = [
+    // Asthma: beta blockers (also as eye drops) and aspirin or NSAIDs.
+    (HealthCondition.asthma, ['C07', 'S01ED'], 'Beta blockers', 'حاصرات بيتا',
+        'can narrow the airways and trigger asthma attacks', 'قد تضيّق المجاري التنفسية وتسبب نوبات ربو'),
+    (HealthCondition.asthma, ['M01A', 'N02BA', 'B01AC06'], 'NSAIDs and aspirin', 'مضادات الالتهاب غير الستيرويدية والأسبرين',
+        'can trigger asthma attacks in some people', 'قد تسبب نوبات ربو لدى بعض الأشخاص'),
+    // COPD: non-selective beta blockers; medicines that slow breathing
+    // (R05DA04 is codeine; other R05DA cough medicines are not opioids
+    // in this sense).
+    (HealthCondition.copd, ['C07AA', 'C07AG', 'S01ED'], 'Non-selective beta blockers', 'حاصرات بيتا غير الانتقائية',
+        'can narrow the airways', 'قد تضيّق المجاري التنفسية'),
+    (HealthCondition.copd, ['N05B', 'N05C', 'N02A', 'R05DA04'], 'Sedatives and opioids', 'المهدئات والمسكنات الأفيونية',
+        'can slow breathing', 'قد تبطئ التنفس'),
+    // Kidney disease.
+    (HealthCondition.kidney, ['M01A'], 'NSAIDs (anti-inflammatory painkillers)', 'مضادات الالتهاب غير الستيرويدية',
+        'can harm the kidneys', 'قد تضر بالكلى'),
+    (HealthCondition.kidney, ['A10BA'], 'Metformin', 'الميتفورمين',
+        'may need a lower dose, or be stopped, when the kidneys are weak', 'قد تحتاج إلى جرعة أقل أو إيقاف عند ضعف الكلى'),
+    (HealthCondition.kidney, ['J01GB'], 'Aminoglycoside antibiotics', 'المضادات الحيوية من فئة الأمينوغليكوزيد',
+        'can harm the kidneys', 'قد تضر بالكلى'),
+    // Liver disease.
+    (HealthCondition.liver, ['N02BE01'], 'Paracetamol', 'الباراسيتامول',
+        'has a lower safe daily maximum in liver disease', 'لها حد يومي آمن أقل عند أمراض الكبد'),
+    (HealthCondition.liver, ['C10AA'], 'Statins', 'الستاتينات',
+        'may need liver checks or a different medicine', 'قد تحتاج إلى فحوص للكبد أو دواء آخر'),
+    // Pregnancy.
+    (HealthCondition.pregnant, ['C09A', 'C09B', 'C09C', 'C09D'], 'ACE inhibitors and sartans', 'مثبطات الإنزيم المحول والسارتانات',
+        'can harm the unborn baby', 'قد تضر بالجنين'),
+    (HealthCondition.pregnant, ['B01AA'], 'Warfarin-type blood thinners', 'مسيلات الدم من نوع الوارفارين',
+        'can harm the unborn baby', 'قد تضر بالجنين'),
+    (HealthCondition.pregnant, ['D10BA', 'N03AG01'], 'Isotretinoin and valproate', 'الإيزوتريتينوين والفالبروات',
+        'can cause serious birth defects', 'قد تسبب تشوهات خلقية خطيرة'),
+    (HealthCondition.pregnant, ['J01AA'], 'Tetracycline antibiotics', 'المضادات الحيوية من فئة التتراسيكلين',
+        "can affect the baby's teeth and bones", 'قد تؤثر على أسنان الجنين وعظامه'),
+    (HealthCondition.pregnant, ['C10AA', 'J01MA'], 'Statins and quinolone antibiotics', 'الستاتينات ومضادات الكينولون الحيوية',
+        'are usually avoided in pregnancy', 'يُتجنب استعمالها عادةً أثناء الحمل'),
+    (HealthCondition.pregnant, ['M01A'], 'NSAIDs (anti-inflammatory painkillers)', 'مضادات الالتهاب غير الستيرويدية',
+        'are usually avoided in pregnancy, especially in its last months', 'يُتجنب استعمالها عادةً أثناء الحمل خاصةً في أشهره الأخيرة'),
+    // Children (under 12, also from the age saved in My Health).
+    (HealthCondition.child, ['N02BA', 'B01AC06'], 'Aspirin and salicylates', 'الأسبرين والساليسيلات',
+        "are not given to children (risk of Reye's syndrome)", 'لا تُعطى للأطفال (خطر متلازمة راي)'),
+    (HealthCondition.child, ['R05DA04', 'N02AJ', 'N02AX02'], 'Codeine, tramadol and similar opioid painkillers',
+        'الكودايين والترامادول والمسكنات الأفيونية المشابهة',
+        'are not used in children under 12', 'لا تُستعمل للأطفال دون 12 سنة'),
+    (HealthCondition.child, ['J01AA', 'J01MA'], 'Tetracycline and quinolone antibiotics', 'مضادات التتراسيكلين والكينولون الحيوية',
+        'are usually avoided in children', 'يُتجنب استعمالها عادةً عند الأطفال'),
+    // Heart disease and high blood pressure.
+    (HealthCondition.heart, ['M01A'], 'NSAIDs (anti-inflammatory painkillers)', 'مضادات الالتهاب غير الستيرويدية',
+        'can raise the risk of heart problems and fluid retention', 'قد تزيد خطر مشاكل القلب واحتباس السوائل'),
+    (HealthCondition.heart, ['R01BA'], 'Decongestants taken by mouth', 'مزيلات الاحتقان عن طريق الفم',
+        'can raise the heart rate and blood pressure', 'قد ترفع نبض القلب وضغط الدم'),
+    (HealthCondition.highBloodPressure, ['M01A', 'R01BA', 'H02AB'], 'NSAIDs, decongestants and corticosteroids',
+        'مضادات الالتهاب ومزيلات الاحتقان والكورتيزون', 'can raise blood pressure', 'قد ترفع ضغط الدم'),
+    // Diabetes.
+    (HealthCondition.diabetes, ['H02AB'], 'Corticosteroids (cortisone)', 'الكورتيكوستيرويدات (الكورتيزون)',
+        'can raise blood sugar', 'قد ترفع السكر في الدم'),
+  ];
 
   static const Map<String, String> _ingredientSynonyms = {
     'acetaminophen': 'paracetamol',
@@ -214,12 +306,15 @@ class MedicationSafetyService {
   }
 
   /// [medicines] are products confirmed for the prescription. [possible] are
-  /// products that only probably match a line; they get allergy checks only,
-  /// worded as "if this line is ...". [catalog] lets an ingredient allergy
-  /// extend to its chemical class (amoxicillin -> other penicillins).
+  /// products that only probably match a line; they get allergy and
+  /// condition checks only, worded as "if this line is ...". [catalog] lets
+  /// an ingredient allergy extend to its chemical class (amoxicillin ->
+  /// other penicillins). [conditions] are the person's health conditions
+  /// (see HealthProfile.effectiveConditions).
   List<SafetyAlert> check(
     List<MedicinePrice> medicines, {
     List<String> allergies = const <String>[],
+    Set<HealthCondition> conditions = const <HealthCondition>{},
     List<MedicinePrice> possible = const <MedicinePrice>[],
     List<MedicinePrice> catalog = const <MedicinePrice>[],
   }) {
@@ -233,9 +328,52 @@ class MedicationSafetyService {
     return <SafetyAlert>[
       ..._allergyAlerts(list, allergies, catalog),
       ..._allergyAlerts(possibleList, allergies, catalog, uncertain: true),
+      ..._conditionAlerts(list, conditions),
+      ..._conditionAlerts(possibleList, conditions, uncertain: true),
       ..._duplicateIngredientAlerts(list),
       ..._sameClassAlerts(list),
     ];
+  }
+
+  /// The ATC prefixes of every condition rule, for tests.
+  @visibleForTesting
+  static List<List<String>> get conditionRulePrefixes => [for (final rule in _conditionRules) rule.$2];
+
+  /// The conditions [alerts] already warn about. The others still deserve
+  /// a reminder to tell the doctor (see the analysis screen).
+  static Set<HealthCondition> conditionsWithAlerts(List<SafetyAlert> alerts) =>
+      <HealthCondition>{for (final alert in alerts) if (alert.condition != null) alert.condition!};
+
+  List<SafetyAlert> _conditionAlerts(
+    List<MedicinePrice> medicines,
+    Set<HealthCondition> conditions, {
+    bool uncertain = false,
+  }) {
+    final alerts = <SafetyAlert>[];
+    if (medicines.isEmpty || conditions.isEmpty) return alerts;
+
+    for (final rule in _conditionRules) {
+      if (!conditions.contains(rule.$1)) continue;
+      final matching = medicines.where((medicine) {
+        final atc = (medicine.atcCode ?? '').toUpperCase();
+        return atc.isNotEmpty && rule.$2.any(atc.startsWith);
+      }).toList();
+      if (matching.isEmpty) continue;
+
+      alerts.add(SafetyAlert(
+        type: SafetyAlertType.condition,
+        medicines: matching.map((m) => m.brandName).toList(),
+        subjectEn: rule.$1.label(isArabic: false),
+        subjectAr: rule.$1.label(isArabic: true),
+        uncertain: uncertain,
+        condition: rule.$1,
+        drugClassEn: rule.$3,
+        drugClassAr: rule.$4,
+        effectEn: rule.$5,
+        effectAr: rule.$6,
+      ));
+    }
+    return alerts;
   }
 
   List<SafetyAlert> _allergyAlerts(

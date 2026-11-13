@@ -1,0 +1,259 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PharmaLens privacy policy | TechWrap</title>
+<meta name="description" content="What PharmaLens keeps on your phone, what it sends to Google and other services, and how to delete your data.">
+<meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#060b1c" media="(prefers-color-scheme: dark)">
+<link rel="icon" type="image/png" href="/pharmalens/icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;600;700&family=Inter:wght@400;600;700&family=Space+Grotesk:wght@600;700&display=swap">
+<style>
+:root {
+  color-scheme: light dark;
+  --bg: #ffffff; --surface: #f6f8fc; --card: #ffffff; --border: #e2e7f0;
+  --fg: #011132; --muted: #5b6475; --accent: #0153f0; --accent-soft: rgb(1 83 240 / 0.08);
+  --teal: #168f88; --warn-bg: #fff8ec; --warn-border: #f2c47a;
+  --shadow: 0 1px 2px rgb(1 17 50 / 0.04), 0 8px 24px -12px rgb(1 17 50 / 0.12);
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #060b1c; --surface: #0c1430; --card: #121c3d; --border: #1e2a4f;
+    --fg: #eaf0ff; --muted: #9aa6c0; --accent: #5b93ff; --accent-soft: rgb(91 147 255 / 0.12);
+    --teal: #6bdad3; --warn-bg: #2a2110; --warn-border: #7a5a1e;
+    --shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 12px 32px -16px rgb(0 0 0 / 0.6);
+  }
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; background: var(--bg); color: var(--fg); overflow-wrap: break-word;
+  font: 16px/1.65 "Inter", "IBM Plex Sans Arabic", system-ui, -apple-system, "Segoe UI", sans-serif; }
+[lang="ar"] { font-family: "IBM Plex Sans Arabic", system-ui, sans-serif; }
+a { color: var(--accent); }
+header.site { position: sticky; top: 0; z-index: 2; background: color-mix(in srgb, var(--bg) 82%, transparent);
+  backdrop-filter: blur(10px); border-bottom: 1px solid var(--border); }
+header.site .in { max-width: 960px; margin: 0 auto; padding: 10px 16px; display: flex; flex-wrap: wrap;
+  align-items: center; gap: 8px 16px; }
+/* One logo per theme: logo-light.png has dark text (for light backgrounds). */
+header.site img.logo { height: 28px; width: auto; display: block; }
+header.site img.logo-for-dark { display: none; }
+@media (prefers-color-scheme: dark) {
+  header.site img.logo-for-light { display: none; }
+  header.site img.logo-for-dark { display: block; }
+}
+header.site nav { margin-inline-start: auto; display: flex; flex-wrap: wrap; gap: 4px 14px; font-weight: 600; font-size: 14px; }
+header.site nav a { text-decoration: none; }
+main, .card, .hero .txt { min-width: 0; }
+main { max-width: 960px; margin: 0 auto; padding: 24px 16px 56px; }
+h1, h2, .display { font-family: "Space Grotesk", "IBM Plex Sans Arabic", system-ui, sans-serif; letter-spacing: -0.01em; }
+[lang="ar"] h1, [lang="ar"] h2, [lang="ar"] .display { font-family: "IBM Plex Sans Arabic", system-ui, sans-serif; letter-spacing: 0; }
+h1 { font-size: clamp(1.7rem, 4vw, 2.3rem); line-height: 1.2; margin: 0.4em 0; }
+h2 { font-size: 1.2rem; margin: 1.8em 0 0.5em; }
+.card { background: var(--card); border: 1px solid var(--border); border-radius: 24px; padding: 8px 24px 24px;
+  box-shadow: var(--shadow); margin-bottom: 24px; }
+.hero { display: flex; gap: 20px; align-items: center; flex-wrap: wrap; padding: 24px; }
+.hero img { width: 96px; height: 96px; border-radius: 24px; box-shadow: var(--shadow); }
+.hero .txt { flex: 1 1 240px; }
+@media (max-width: 480px) { .card { padding: 4px 16px 18px; } .hero { padding: 18px; } }
+.tag { display: inline-block; background: var(--accent-soft); color: var(--accent); border-radius: 999px;
+  padding: 4px 12px; font-size: 13px; font-weight: 700; }
+.btn { display: inline-flex; align-items: center; gap: 8px; background: var(--fg); color: var(--bg); text-decoration: none;
+  padding: 12px 18px; border-radius: 14px; font-weight: 700; margin: 6px 8px 0 0; }
+.btn.alt { background: var(--accent-soft); color: var(--accent); }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; padding: 0; list-style: none; }
+.grid li { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 14px 16px; margin: 0; }
+.grid b { display: block; margin-bottom: 2px; }
+.notice { background: var(--warn-bg); border: 1px solid var(--warn-border); border-radius: 16px; padding: 4px 18px; }
+.langs { display: flex; gap: 10px; margin: 8px 0 16px; }
+li { margin: 4px 0; }
+footer.site { border-top: 1px solid var(--border); color: var(--muted); font-size: 14px; }
+footer.site .in { max-width: 960px; margin: 0 auto; padding: 20px 16px 32px; display: flex; flex-wrap: wrap; gap: 8px 20px; }
+footer.site a { color: var(--muted); }
+</style>
+</head>
+<body>
+<header class="site"><div class="in">
+  <a href="/" aria-label="TechWrap home">
+    <img class="logo logo-for-light" src="/assets/img/logo-light.png" alt="TechWrap" width="113" height="28">
+    <img class="logo logo-for-dark" src="/assets/img/logo-dark.png" alt="TechWrap" width="113" height="28">
+  </a>
+  <nav><a href="/pharmalens">PharmaLens</a><a href="/pharmalens/privacy-policy">Privacy</a><a href="/contact">Contact</a></nav>
+</div></header>
+<main>
+<nav class="langs"><a class="btn alt" href="#en">English</a><a class="btn alt" href="#ar">العربية</a></nav>
+<article class="card" id="en" lang="en" dir="ltr">
+<h1>PharmaLens privacy policy</h1>
+<p>Effective date: 13 November 2026</p>
+<p>PharmaLens is a medicine safety assistant for Lebanon, made by <strong>TechWrap LB</strong> (Beirut, Lebanon). It is an individual initiative: it is not the Ministry of Public Health (MOPH) app and is not affiliated with the Ministry. This policy explains what the app keeps on your phone, what it sends to other services, and the choices you have.</p>
+<h2>The short version</h2>
+<ul>
+<li>PharmaLens has <strong>no account, no server of its own, no ads and no analytics</strong>. We do not sell or share your data.
+</li>
+<li>Your health profiles, prescriptions, reminders and dose history are <strong>saved only on your phone</strong>.
+</li>
+<li>To read a prescription or answer a question, the app sends the photo or the question to <strong>Google's Gemini AI</strong>. To find pharmacies near you, it sends your location to <strong>Google Places</strong>.
+</li>
+<li>You can delete your data at any time: <strong>Settings &gt; Delete all my data</strong>, or uninstall the app.
+</li></ul>
+<h2>What stays on your phone</h2>
+<p>The app saves the following on your device only. We cannot see it.</p>
+<ul>
+<li><strong>Health profiles</strong> for you and the family members you add: names you type, allergies, health conditions, age (stored as a birth year), sex, height and weight.
+</li>
+<li><strong>Scanned prescriptions</strong>: the photo, the medicines read from it, the doctor's name and specialty when written, and who the prescription is for.
+</li>
+<li><strong>Medicine reminders</strong> and the history of doses taken, skipped or snoozed.
+</li>
+<li><strong>Saved medicine pages</strong> (patient information the app downloaded), the assistant conversation while the app is open, and your settings (language, theme, alarm sound).
+</li></ul>
+<h2>What is sent to other services, and why</h2>
+<p>The app talks directly to these services. Each one receives only what the feature needs, over an encrypted connection (HTTPS).</p>
+<ul>
+<li><strong>Google Gemini API (Google LLC)</strong>
+<ul>
+<li>When you scan a prescription: the photo and the text the phone read from it, so the AI can transcribe the medicines and directions.
+</li>
+<li>When you use the assistant: your messages, any photo you attach, and the information the assistant looks up to answer you. When your question is about your own medicines, that can include the allergies, conditions, reminders and recent prescriptions saved for the selected person.
+</li>
+<li>On a medicine page: the medicine's name, ingredients and label text, to write a short summary in English and Arabic.
+</li>
+<li>Google processes this under the <a href="https://ai.google.dev/gemini-api/terms" rel="noopener">Gemini API terms</a> and the <a href="https://policies.google.com/privacy" rel="noopener">Google Privacy Policy</a>. Under those terms, content sent through unpaid (free tier) access may be used by Google to improve its products; paid access is not used that way.
+</li></ul>
+</li>
+<li><strong>Google Places API (Google LLC)</strong>
+<ul>
+<li>When you open the pharmacies map: your current location, to find pharmacies near you. When you search the map: the words you type.
+</li>
+<li>When a doctor's hospital is shown: the hospital's name, to find its phone number and address.
+</li>
+<li>The app asks for location only while you use the map, never in the background.
+</li></ul>
+</li>
+<li><strong>openFDA (U.S. Food and Drug Administration)</strong>: the active ingredients of a medicine you open, to find its official U.S. label.
+</li>
+<li><strong>OpenStreetMap</strong>: the map images for the area you are looking at. Like any website, the tile server sees your internet address.
+</li>
+<li><strong>GitHub (raw.githubusercontent.com)</strong>: the app downloads the latest official MOPH price list from our public repository. GitHub sees your internet address; nothing about you is sent.
+</li>
+<li><strong>WhatsApp</strong>: only if you choose to contact us or to report an AI answer. A report contains the AI's answer and your reason, not your question or health data.
+</li></ul>
+<h2>Permissions</h2>
+<ul>
+<li><strong>Camera and photos</strong>: only when you take or choose a prescription photo, through Android's own picker.
+</li>
+<li><strong>Location</strong> (while using the app): to show nearby pharmacies.
+</li>
+<li><strong>Notifications, alarms and reminders, full-screen alarms, start at boot</strong>: to remind you of your doses on time, ring like an alarm when you choose that, and keep your reminders after the phone restarts.
+</li></ul>
+<h2>AI can make mistakes</h2>
+<p>Prescription readings, medicine summaries and assistant answers are produced by AI and can be wrong. PharmaLens is a helper, not a doctor or a pharmacist, and it is not a medical device. Always check medicines, doses and directions with your doctor or pharmacist. Medicine prices come from the official list published on the MOPH website (moph.gov.lb).</p>
+<h2>Children</h2>
+<p>PharmaLens is meant for adults managing their own or their family's medicines. It is not directed at children, and we do not knowingly collect information from children. A parent may add a child's profile; that profile stays on the parent's phone like all other data.</p>
+<h2>Keeping and deleting your data</h2>
+<p>Your data stays on your phone until you delete it. You can delete one scan, reminder or family member at any time, or everything at once in <strong>Settings &gt; Delete all my data</strong>. Uninstalling the app removes all of it. Because we have no server or account, there is nothing to delete on our side. Data sent to Google or the FDA for a request is handled under their own policies.</p>
+<h2>Security</h2>
+<p>All connections use HTTPS. Data on your phone is protected by Android's app sandbox. Keep your phone locked to protect your health information.</p>
+<h2>Changes to this policy</h2>
+<p>If this policy changes, we will update the date above and the text in the app.</p>
+<h2>Contact</h2>
+<p>TechWrap LB, Beirut, Lebanon</p>
+<ul>
+<li>Website: <a href="https://techwraplb.com" rel="noopener">techwraplb.com</a>
+</li>
+<li>WhatsApp: +961 70 080 214
+</li></ul>
+</article>
+<article class="card" id="ar" lang="ar" dir="rtl">
+<h1>سياسة الخصوصية لتطبيق فارما لينس</h1>
+<p>تاريخ السريان: 13 تشرين الثاني 2026</p>
+<p>فارما لينس مساعد لسلامة الأدوية في لبنان، من تطوير <strong>TechWrap LB</strong> (بيروت، لبنان). هو مبادرة فردية، وليس تطبيق وزارة الصحة العامة ولا يتبع للوزارة. توضح هذه السياسة ما يحفظه التطبيق على هاتفك، وما يرسله إلى خدمات أخرى، والخيارات المتاحة لك.</p>
+<h2>باختصار</h2>
+<ul>
+<li>لا يوجد في فارما لينس <strong>حساب ولا خادم خاص بنا ولا إعلانات ولا أدوات تحليل</strong>. لا نبيع بياناتك ولا نشاركها.
+</li>
+<li>ملفاتك الصحية ووصفاتك وتذكيراتك وسجل جرعاتك <strong>محفوظة على هاتفك فقط</strong>.
+</li>
+<li>لقراءة وصفة أو الإجابة عن سؤال، يرسل التطبيق الصورة أو السؤال إلى <strong>الذكاء الاصطناعي Gemini من Google</strong>. وللعثور على الصيدليات القريبة، يرسل موقعك إلى <strong>Google Places</strong>.
+</li>
+<li>يمكنك حذف بياناتك في أي وقت: <strong>الإعدادات &gt; حذف جميع بياناتي</strong>، أو بإزالة التطبيق.
+</li></ul>
+<h2>ما يبقى على هاتفك</h2>
+<p>يحفظ التطبيق ما يلي على جهازك فقط، ولا يمكننا الاطلاع عليه:</p>
+<ul>
+<li><strong>الملفات الصحية</strong> لك ولأفراد عائلتك الذين تضيفهم: الأسماء التي تكتبها، والحساسية، والحالات الصحية، والعمر (محفوظًا كسنة الولادة)، والجنس، والطول، والوزن.
+</li>
+<li><strong>الوصفات الممسوحة</strong>: الصورة، والأدوية المقروءة منها، واسم الطبيب واختصاصه إن كُتبا، والشخص الذي تخصه الوصفة.
+</li>
+<li><strong>تذكيرات الأدوية</strong> وسجل الجرعات المأخوذة أو المتخطاة أو المؤجلة.
+</li>
+<li><strong>صفحات الأدوية المحفوظة</strong> (معلومات المريض التي نزّلها التطبيق)، ومحادثة المساعد أثناء فتح التطبيق، وإعداداتك (اللغة، المظهر، صوت المنبه).
+</li></ul>
+<h2>ما يُرسل إلى خدمات أخرى ولماذا</h2>
+<p>يتصل التطبيق مباشرة بهذه الخدمات، وتتلقى كل منها ما تحتاجه الميزة فقط، عبر اتصال مشفّر (HTTPS).</p>
+<ul>
+<li><strong>واجهة Google Gemini (شركة Google)</strong>
+<ul>
+<li>عند مسح وصفة: الصورة والنص الذي قرأه الهاتف منها، لكي يكتب الذكاء الاصطناعي الأدوية وطريقة استعمالها.
+</li>
+<li>عند استخدام المساعد: رسائلك، وأي صورة ترفقها، والمعلومات التي يبحث عنها المساعد للإجابة. إذا كان سؤالك عن أدويتك، قد يشمل ذلك الحساسية والحالات الصحية والتذكيرات والوصفات الأخيرة المحفوظة للشخص المحدد.
+</li>
+<li>في صفحة الدواء: اسم الدواء ومكوناته ونص نشرته، لكتابة ملخص قصير بالعربية والإنجليزية.
+</li>
+<li>تعالج Google هذه البيانات وفق <a href="https://ai.google.dev/gemini-api/terms" rel="noopener">شروط Gemini API</a> و<a href="https://policies.google.com/privacy" rel="noopener">سياسة خصوصية Google</a>. وبموجب هذه الشروط، قد تستخدم Google المحتوى المرسل عبر الوصول المجاني لتحسين منتجاتها، أما الوصول المدفوع فلا يُستخدم بهذه الطريقة.
+</li></ul>
+</li>
+<li><strong>واجهة Google Places (شركة Google)</strong>
+<ul>
+<li>عند فتح خريطة الصيدليات: موقعك الحالي، للعثور على الصيدليات القريبة. وعند البحث في الخريطة: الكلمات التي تكتبها.
+</li>
+<li>عند عرض مستشفى طبيب: اسم المستشفى، للعثور على رقم هاتفه وعنوانه.
+</li>
+<li>يطلب التطبيق الموقع فقط أثناء استخدامك للخريطة، وليس في الخلفية أبدًا.
+</li></ul>
+</li>
+<li><strong>openFDA (إدارة الغذاء والدواء الأمريكية)</strong>: المواد الفعالة للدواء الذي تفتحه، للعثور على نشرته الرسمية الأمريكية.
+</li>
+<li><strong>OpenStreetMap</strong>: صور الخريطة للمنطقة التي تنظر إليها. وكما في أي موقع إلكتروني، يرى خادم الخرائط عنوان الإنترنت الخاص بك.
+</li>
+<li><strong>GitHub (raw.githubusercontent.com)</strong>: ينزّل التطبيق أحدث لائحة أسعار رسمية من وزارة الصحة من مستودعنا العام. يرى GitHub عنوان الإنترنت الخاص بك، ولا يُرسل أي شيء عنك.
+</li>
+<li><strong>واتساب</strong>: فقط إذا اخترت التواصل معنا أو الإبلاغ عن إجابة للذكاء الاصطناعي. يحتوي البلاغ على إجابة الذكاء الاصطناعي وسببك، وليس على سؤالك أو بياناتك الصحية.
+</li></ul>
+<h2>الأذونات</h2>
+<ul>
+<li><strong>الكاميرا والصور</strong>: فقط عندما تلتقط صورة وصفة أو تختارها، عبر أداة الاختيار الخاصة بنظام Android.
+</li>
+<li><strong>الموقع</strong> (أثناء استخدام التطبيق): لعرض الصيدليات القريبة.
+</li>
+<li><strong>الإشعارات والمنبهات والتذكيرات والمنبه بملء الشاشة والتشغيل عند الإقلاع</strong>: لتذكيرك بجرعاتك في وقتها، ورنين المنبه عند اختيارك ذلك، والحفاظ على تذكيراتك بعد إعادة تشغيل الهاتف.
+</li></ul>
+<h2>قد يخطئ الذكاء الاصطناعي</h2>
+<p>قراءة الوصفات وملخصات الأدوية وإجابات المساعد يُنتجها الذكاء الاصطناعي وقد تكون خاطئة. فارما لينس أداة مساعدة، وليس طبيبًا ولا صيدليًا، وليس جهازًا طبيًا. تحقق دائمًا من الأدوية والجرعات وطريقة الاستعمال مع طبيبك أو الصيدلي. أسعار الأدوية مأخوذة من اللائحة الرسمية المنشورة على موقع وزارة الصحة العامة (moph.gov.lb).</p>
+<h2>الأطفال</h2>
+<p>فارما لينس مخصص للبالغين الذين يديرون أدويتهم أو أدوية عائلاتهم. هو غير موجّه للأطفال، ولا نجمع عن قصد أي معلومات من الأطفال. يمكن للأهل إضافة ملف لطفلهم، ويبقى هذا الملف على هاتف الأهل مثل باقي البيانات.</p>
+<h2>حفظ بياناتك وحذفها</h2>
+<p>تبقى بياناتك على هاتفك حتى تحذفها. يمكنك حذف وصفة أو تذكير أو فرد من العائلة في أي وقت، أو حذف كل شيء دفعة واحدة من <strong>الإعدادات &gt; حذف جميع بياناتي</strong>. إزالة التطبيق تحذفها كلها. ولأنه لا يوجد لدينا خادم أو حساب، لا يوجد ما يُحذف من جهتنا. أما البيانات المرسلة إلى Google أو إدارة الغذاء والدواء لتلبية طلب ما، فتخضع لسياساتهما.</p>
+<h2>الأمان</h2>
+<p>جميع الاتصالات تستخدم HTTPS. والبيانات على هاتفك محمية بعزل التطبيقات في نظام Android. أبقِ هاتفك مقفلًا لحماية معلوماتك الصحية.</p>
+<h2>التغييرات على هذه السياسة</h2>
+<p>إذا تغيّرت هذه السياسة، سنحدّث التاريخ أعلاه والنص داخل التطبيق.</p>
+<h2>التواصل</h2>
+<p>TechWrap LB، بيروت، لبنان</p>
+<ul>
+<li>الموقع الإلكتروني: <a href="https://techwraplb.com" rel="noopener">techwraplb.com</a>
+</li>
+<li>واتساب: ‎+961 70 080 214
+</li></ul>
+</article>
+</main>
+<footer class="site"><div class="in">
+  <span>© 2026 TechWrap LB · Beirut, Lebanon</span>
+  <a href="/pharmalens/privacy-policy">Privacy policy · سياسة الخصوصية</a>
+  <a href="https://wa.me/96170080214" rel="noopener">WhatsApp +961 70 080 214</a>
+  <a href="https://www.instagram.com/techwrap.lb/" rel="noopener">Instagram @techwrap.lb</a>
+</div></footer>
+</body>
+</html>

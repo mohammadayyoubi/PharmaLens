@@ -16,7 +16,9 @@ import '../services/prescription_history_service.dart';
 import '../services/dose_log_service.dart';
 import '../services/reminder_service.dart';
 import '../theme/pharmalens_theme.dart';
+import '../widgets/ai_notice.dart';
 import '../widgets/chatbot_view.dart';
+import '../widgets/family_member_dialog.dart';
 import '../widgets/reminder_editor.dart';
 import '../widgets/reminder_setup_sheet.dart';
 import '../widgets/safety_alert_card.dart';
@@ -66,45 +68,32 @@ class _MyHealthScreenState extends State<MyHealthScreen> {
               final wide = constraints.maxWidth >= Breakpoints.expanded - 264;
 
               final header = Padding(
-                padding: const EdgeInsets.only(top: 8, bottom: 14),
-                child: Row(
+                padding: const EdgeInsets.only(top: 4, bottom: 12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    const AdaptiveBackButton(),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Semantics(
-                            header: true,
-                            child: Text(
-                              appText(_isArabic).myHealth,
-                              style: TextStyle(color: palette.textPrimary, fontSize: 26, fontWeight: FontWeight.w900),
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            appText(_isArabic).prescriptionsRemindersAllergiesAndConditionsSaved,
-                            style: TextStyle(color: palette.textSecondary, fontSize: 13, fontWeight: FontWeight.w600),
-                          ),
-                          const SizedBox(height: 10),
-                          _ProfileSwitcher(isArabic: _isArabic),
-                        ],
-                      ),
+                    GradientPageHeader(
+                      icon: Icons.favorite_rounded,
+                      title: appText(_isArabic).myHealth,
+                      subtitle: appText(_isArabic).prescriptionsRemindersAllergiesAndConditionsSaved,
+                      actions: [
+                        GradientPageHeader.action(
+                          icon: Icons.ios_share_rounded,
+                          tooltip: appText(_isArabic).shareMedicineList,
+                          onPressed: () async {
+                            final messenger = ScaffoldMessenger.of(context);
+                            final shared = await const MedicationListService().share(isArabic: _isArabic);
+                            if (!shared) {
+                              messenger.showSnackBar(
+                                SnackBar(content: Text(appText(_isArabic).medicineListCopied)),
+                              );
+                            }
+                          },
+                        ),
+                      ],
                     ),
-                    const SizedBox(width: 8),
-                    IconButton.filledTonal(
-                      tooltip: appText(_isArabic).shareMedicineList,
-                      icon: const Icon(Icons.ios_share_rounded),
-                      onPressed: () async {
-                        final messenger = ScaffoldMessenger.of(context);
-                        final shared = await const MedicationListService().share(isArabic: _isArabic);
-                        if (!shared) {
-                          messenger.showSnackBar(
-                            SnackBar(content: Text(appText(_isArabic).medicineListCopied)),
-                          );
-                        }
-                      },
-                    ),
+                    const SizedBox(height: 12),
+                    _ProfileSwitcher(isArabic: _isArabic),
                   ],
                 ),
               );
@@ -153,10 +142,14 @@ class _MyHealthScreenState extends State<MyHealthScreen> {
                         unselectedLabelColor: palette.textSecondary,
                         indicatorColor: PharmaLensColors.teal,
                         labelStyle: const TextStyle(fontWeight: FontWeight.w800),
+                        // One line each: long labels shrink instead of wrapping.
                         tabs: [
-                          Tab(text: appText(_isArabic).prescriptions),
-                          Tab(text: appText(_isArabic).reminders),
-                          Tab(text: appText(_isArabic).health),
+                          for (final label in <String>[
+                            appText(_isArabic).prescriptions,
+                            appText(_isArabic).reminders,
+                            appText(_isArabic).health,
+                          ])
+                            Tab(child: FittedBox(fit: BoxFit.scaleDown, child: Text(label, maxLines: 1))),
                         ],
                       ),
                     ),
@@ -345,6 +338,47 @@ class PrescriptionRecordScreen extends StatelessWidget {
 
   final PrescriptionRecord record;
 
+  /// Moves the scan to another family member (it was saved under the
+  /// wrong person).
+  Future<void> _changePerson(BuildContext context, PrescriptionRecord current, bool isArabic) async {
+    final service = HealthProfileService();
+    final chosen = await showModalBottomSheet<String>(
+      context: context,
+      useSafeArea: true,
+      builder: (sheetContext) {
+        final palette = PharmaLensTheme.paletteOf(sheetContext);
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                appText(isArabic).whoIsThisPrescriptionFor,
+                style: TextStyle(color: palette.textPrimary, fontSize: 18, fontWeight: FontWeight.w900),
+              ),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  for (final profile in service.profiles)
+                    ChoiceChip(
+                      avatar: Icon(profile.isOwner ? Icons.person_rounded : Icons.family_restroom_rounded, size: 18),
+                      label: Text(profile.displayName(isArabic: isArabic)),
+                      selected: profile.id == current.profileId,
+                      onSelected: (_) => Navigator.of(sheetContext).pop(profile.id),
+                    ),
+                ],
+              ),
+            ],
+          ),
+        );
+      },
+    );
+    if (chosen != null) await PrescriptionHistoryService().updateProfile(current.id, chosen);
+  }
+
   void _openPhoto(BuildContext context, String path) {
     Navigator.of(context).push(
       MaterialPageRoute<void>(
@@ -404,11 +438,16 @@ class PrescriptionRecordScreen extends StatelessWidget {
         ],
       ),
       body: ListenableBuilder(
-        listenable: HealthProfileService(),
+        listenable: Listenable.merge(<Listenable>[HealthProfileService(), PrescriptionHistoryService()]),
         builder: (context, _) {
+          // The record may have been moved to someone else since it opened.
+          final current = PrescriptionHistoryService().records.where((r) => r.id == record.id).firstOrNull ?? record;
+          final profiles = HealthProfileService();
+          final person = profiles.byId(current.profileId) ?? profiles.byId(HealthProfileService.ownerId) ?? profiles.active;
           final alerts = const MedicationSafetyService().check(
             products,
-            allergies: HealthProfileService().allergies,
+            allergies: person.allergies,
+            conditions: person.effectiveConditions,
             catalog: MophMedicineService().catalog,
           );
 
@@ -438,6 +477,36 @@ class PrescriptionRecordScreen extends StatelessWidget {
           final details = Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: SurfaceCard(
+                            padding: const EdgeInsets.fromLTRB(14, 8, 6, 8),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  person.isOwner ? Icons.person_rounded : Icons.family_restroom_rounded,
+                                  color: PharmaLensColors.teal,
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Text(
+                                    person.isOwner ? appText(isArabic).forYou : appText(isArabic).forPerson(person.name),
+                                    style: TextStyle(color: palette.textPrimary, fontWeight: FontWeight.w800),
+                                  ),
+                                ),
+                                if (profiles.hasFamily)
+                                  TextButton(
+                                    onPressed: () => _changePerson(context, current, isArabic),
+                                    child: Text(appText(isArabic).change),
+                                  ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: AiNotice(isArabic: isArabic, message: appText(isArabic).aiReadingNotice),
+                        ),
                         if (record.doctorName.isNotEmpty || record.specialty.isNotEmpty)
                           Padding(
                             padding: const EdgeInsets.only(bottom: 12),
@@ -454,7 +523,7 @@ class PrescriptionRecordScreen extends StatelessWidget {
                         for (final entry in record.medicines)
                           Padding(
                             padding: const EdgeInsets.only(bottom: 10),
-                            child: _RecordMedicineTile(entry: entry, isArabic: isArabic),
+                            child: _RecordMedicineTile(entry: entry, isArabic: isArabic, profileId: person.id),
                           ),
                         if (record.medicines.isEmpty)
                           _EmptyState(
@@ -495,10 +564,13 @@ class PrescriptionRecordScreen extends StatelessWidget {
 }
 
 class _RecordMedicineTile extends StatelessWidget {
-  const _RecordMedicineTile({required this.entry, required this.isArabic});
+  const _RecordMedicineTile({required this.entry, required this.isArabic, required this.profileId});
 
   final PrescriptionMedicineEntry entry;
   final bool isArabic;
+
+  /// The person the prescription is for.
+  final String profileId;
 
   @override
   Widget build(BuildContext context) {
@@ -510,7 +582,7 @@ class _RecordMedicineTile extends StatelessWidget {
       onTap: product == null
           ? null
           : () => Navigator.of(context).push(
-                MaterialPageRoute<void>(builder: (_) => MedicineDetailsScreen(medicine: product)),
+                MaterialPageRoute<void>(builder: (_) => MedicineDetailsScreen(medicine: product, profileId: profileId)),
               ),
       child: Row(
         children: [
@@ -550,6 +622,7 @@ class _RecordMedicineTile extends StatelessWidget {
               medicineName: entry.displayName,
               medicineId: entry.medicineId,
               doseNote: entry.instructions,
+              profileId: profileId,
             ),
           ),
         ],
@@ -758,6 +831,25 @@ class _AllergiesSectionState extends State<_AllergiesSection> {
                       selected: profile.conditions.contains(condition),
                       onSelected: (_) => profile.toggleCondition(condition),
                     ),
+                  // Typed by the user ("Other…").
+                  for (final other in profile.active.otherConditions)
+                    InputChip(
+                      label: Text(other),
+                      selected: true,
+                      showCheckmark: false,
+                      avatar: const Icon(Icons.check_rounded, size: 18, color: PharmaLensColors.teal),
+                      onDeleted: () => profile.removeOtherCondition(other),
+                      deleteButtonTooltipMessage: appText(widget.isArabic).remove,
+                    ),
+                  ActionChip(
+                    avatar: const Icon(Icons.add_rounded, size: 18),
+                    label: Text(appText(widget.isArabic).otherCondition),
+                    tooltip: appText(widget.isArabic).addAHealthCondition,
+                    onPressed: () async {
+                      final value = await showOtherConditionDialog(context, isArabic: widget.isArabic);
+                      if (value != null) await profile.addOtherCondition(value);
+                    },
+                  ),
                 ],
               ),
             ),
@@ -846,13 +938,7 @@ class _ProfileSwitcher extends StatelessWidget {
 
   final bool isArabic;
 
-  Future<void> _addPerson(BuildContext context) async {
-    final name = await showDialog<String>(
-      context: context,
-      builder: (_) => _NameDialog(isArabic: isArabic),
-    );
-    if (name != null && name.trim().isNotEmpty) await HealthProfileService().addProfile(name);
-  }
+  Future<void> _addPerson(BuildContext context) => showAddFamilyMemberDialog(context, isArabic: isArabic);
 
   Future<void> _confirmRemove(BuildContext context, HealthProfile person) async {
     final confirmed = await showDialog<bool>(
@@ -909,55 +995,6 @@ class _ProfileSwitcher extends StatelessWidget {
           ),
         );
       },
-    );
-  }
-}
-
-/// Asks for a family member's name. The dialog owns its text field: a
-/// controller disposed by the caller right after `showDialog` returns is
-/// still in use while the dialog fades out, which crashed the app.
-class _NameDialog extends StatefulWidget {
-  const _NameDialog({required this.isArabic});
-
-  final bool isArabic;
-
-  @override
-  State<_NameDialog> createState() => _NameDialogState();
-}
-
-class _NameDialogState extends State<_NameDialog> {
-  final TextEditingController _controller = TextEditingController();
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  void _submit() {
-    final name = _controller.text.trim();
-    if (name.isEmpty) return;
-    Navigator.of(context).pop(name);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final text = appText(widget.isArabic);
-    return AlertDialog(
-      title: Text(text.addAFamilyMember),
-      content: TextField(
-        controller: _controller,
-        autofocus: true,
-        textCapitalization: TextCapitalization.words,
-        textInputAction: TextInputAction.done,
-        decoration: InputDecoration(labelText: text.nameEGMom),
-        onChanged: (_) => setState(() {}),
-        onSubmitted: (_) => _submit(),
-      ),
-      actions: [
-        TextButton(onPressed: () => Navigator.of(context).pop(), child: Text(text.cancel)),
-        FilledButton(onPressed: _controller.text.trim().isEmpty ? null : _submit, child: Text(text.add)),
-      ],
     );
   }
 }
@@ -1137,13 +1174,38 @@ class _BodySectionState extends State<_BodySection> {
     final height = _heightValue, weight = _weightValue;
     final bmi = height == null || weight == null ? null : weight / ((height / 100) * (height / 100));
 
-    Widget field(TextEditingController controller, String label, String suffix, {bool decimal = true}) {
-      return TextField(
-        controller: controller,
-        keyboardType: TextInputType.numberWithOptions(decimal: decimal),
-        textInputAction: TextInputAction.next,
-        onChanged: (_) => _changed(),
-        decoration: InputDecoration(labelText: label, suffixText: suffix, isDense: true),
+    // The name and unit sit above the box, so a third of a narrow phone is
+    // enough for the number itself (a suffix inside the box covered it).
+    Widget field(TextEditingController controller, String label, String unit, {bool decimal = true}) {
+      return MergeSemantics(
+        child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: AlignmentDirectional.centerStart,
+            child: Text(
+              '$label · $unit',
+              maxLines: 1,
+              style: TextStyle(color: palette.textSecondary, fontSize: 12, fontWeight: FontWeight.w700),
+            ),
+          ),
+          const SizedBox(height: 4),
+          TextField(
+            controller: controller,
+            keyboardType: TextInputType.numberWithOptions(decimal: decimal),
+            textInputAction: TextInputAction.next,
+            textAlign: TextAlign.center,
+            onChanged: (_) => _changed(),
+            style: TextStyle(color: palette.textPrimary, fontSize: 17, fontWeight: FontWeight.w800),
+            decoration: const InputDecoration(
+              isDense: true,
+              hintText: '—',
+              contentPadding: EdgeInsets.symmetric(horizontal: 6, vertical: 12),
+            ),
+          ),
+        ],
+        ),
       );
     }
 
@@ -1160,40 +1222,44 @@ class _BodySectionState extends State<_BodySection> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Row(
-                children: [
-                  Expanded(child: field(_age, text.age, text.years, decimal: false)),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: SegmentedButton<BiologicalSex>(
-                      emptySelectionAllowed: true,
-                      showSelectedIcon: false,
-                      segments: [
-                        ButtonSegment(value: BiologicalSex.female, label: Text(text.female)),
-                        ButtonSegment(value: BiologicalSex.male, label: Text(text.male)),
-                      ],
-                      selected: <BiologicalSex>{if (_sex != null) _sex!},
-                      onSelectionChanged: (value) {
-                        _sex = value.isEmpty ? null : value.first;
-                        _changed();
-                      },
-                    ),
+              // Full width, one line per label: in half a row "Female"
+              // wrapped onto two lines on narrow phones.
+              SegmentedButton<BiologicalSex>(
+                emptySelectionAllowed: true,
+                showSelectedIcon: false,
+                segments: [
+                  ButtonSegment(
+                    value: BiologicalSex.female,
+                    icon: const Icon(Icons.female_rounded),
+                    label: FittedBox(fit: BoxFit.scaleDown, child: Text(text.female, maxLines: 1)),
+                  ),
+                  ButtonSegment(
+                    value: BiologicalSex.male,
+                    icon: const Icon(Icons.male_rounded),
+                    label: FittedBox(fit: BoxFit.scaleDown, child: Text(text.male, maxLines: 1)),
                   ),
                 ],
+                selected: <BiologicalSex>{if (_sex != null) _sex!},
+                onSelectionChanged: (value) {
+                  _sex = value.isEmpty ? null : value.first;
+                  _changed();
+                },
               ),
               const SizedBox(height: 12),
               Row(
                 children: [
+                  Expanded(child: field(_age, text.age, text.years, decimal: false)),
+                  const SizedBox(width: 8),
                   Expanded(child: field(_height, text.height, 'cm')),
-                  const SizedBox(width: 10),
+                  const SizedBox(width: 8),
                   Expanded(child: field(_weight, text.weight, 'kg')),
                 ],
               ),
               if (bmi != null) ...[
-                const SizedBox(height: 12),
+                const SizedBox(height: 14),
                 Row(
                   children: [
-                    Icon(Icons.speed_rounded, size: 18, color: _bmiColor(bmi)),
+                    Icon(Icons.speed_rounded, size: 18, color: bmiColor(bmi)),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
@@ -1203,6 +1269,8 @@ class _BodySectionState extends State<_BodySection> {
                     ),
                   ],
                 ),
+                const SizedBox(height: 10),
+                _BmiScale(bmi: bmi, isArabic: widget.isArabic),
               ],
             ],
           ),
@@ -1210,9 +1278,181 @@ class _BodySectionState extends State<_BodySection> {
       ],
     );
   }
+}
 
-  static Color _bmiColor(double bmi) =>
-      bmi < 18.5 || bmi >= 30 ? PharmaLensColors.warning : bmi >= 25 ? PharmaLensColors.info : PharmaLensColors.success;
+/// Color of a BMI band: underweight, healthy, overweight, then obesity
+/// class I, II and III.
+Color bmiColor(double bmi) {
+  if (bmi < 18.5) return PharmaLensColors.bmiUnderweight;
+  if (bmi < 25) return PharmaLensColors.bmiHealthy;
+  if (bmi < 30) return PharmaLensColors.bmiOverweight;
+  if (bmi < 35) return PharmaLensColors.bmiObesity1;
+  if (bmi < 40) return PharmaLensColors.bmiObesity2;
+  return PharmaLensColors.bmiObesity3;
+}
+
+/// A colored bar from BMI 15 to 45 in the WHO bands, with a pointer and the
+/// value above [bmi], and the band limits underneath.
+class _BmiScale extends StatelessWidget {
+  const _BmiScale({required this.bmi, required this.isArabic});
+
+  final double bmi;
+  final bool isArabic;
+
+  static const double _min = 15;
+  static const double _max = 45;
+  static const List<double> _limits = <double>[18.5, 25, 30, 35, 40];
+  static const List<(double, double)> _bands = <(double, double)>[
+    (_min, 18.5),
+    (18.5, 25),
+    (25, 30),
+    (30, 35),
+    (35, 40),
+    (40, _max),
+  ];
+
+  static const double _bubbleHeight = 22;
+  static const double _pointerHeight = 9;
+  static const double _barHeight = 16;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = PharmaLensTheme.paletteOf(context);
+    final value = bmi.toStringAsFixed(1);
+
+    return Semantics(
+      container: true,
+      label: appText(isArabic).bmiScale,
+      value: appText(isArabic).bmiValue(value, bmiCategory(bmi, isArabic: isArabic)),
+      child: ExcludeSemantics(
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final width = constraints.maxWidth;
+            double at(double v) => ((v - _min) / (_max - _min)).clamp(0.0, 1.0) * width;
+            final x = at(bmi);
+
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                SizedBox(
+                  height: _bubbleHeight + _pointerHeight + _barHeight,
+                  child: Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      // The bands: full color, lighter on the top half.
+                      Positioned(
+                        left: 0,
+                        right: 0,
+                        top: _bubbleHeight + _pointerHeight,
+                        height: _barHeight,
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(99),
+                          // Stretch: a DecoratedBox with no child in a Row
+                          // is 0 px tall otherwise, and the bar showed white.
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              for (final band in _bands)
+                                Expanded(
+                                  key: ValueKey<String>('bmi-band-${band.$1}'),
+                                  flex: ((band.$2 - band.$1) * 10).round(),
+                                  child: DecoratedBox(
+                                    decoration: BoxDecoration(
+                                      gradient: LinearGradient(
+                                        begin: Alignment.topCenter,
+                                        end: Alignment.bottomCenter,
+                                        stops: const [0.5, 0.5],
+                                        colors: [
+                                          Color.lerp(bmiColor((band.$1 + band.$2) / 2), Colors.white, 0.22)!,
+                                          bmiColor((band.$1 + band.$2) / 2),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      // Value bubble and pointer.
+                      PositionedDirectional(
+                        start: (x - 26).clamp(0.0, width - 52),
+                        top: 0,
+                        width: 52,
+                        height: _bubbleHeight,
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            color: palette.textPrimary,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Center(
+                            child: Text(
+                              value,
+                              maxLines: 1,
+                              style: TextStyle(color: palette.surface, fontSize: 12, fontWeight: FontWeight.w900),
+                            ),
+                          ),
+                        ),
+                      ),
+                      PositionedDirectional(
+                        start: (x - 8).clamp(0.0, width - 16),
+                        top: _bubbleHeight - 1,
+                        width: 16,
+                        height: _pointerHeight + 4,
+                        child: CustomPaint(painter: _PointerPainter(palette.textPrimary)),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 3),
+                SizedBox(
+                  height: 16,
+                  child: Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      for (final limit in _limits)
+                        PositionedDirectional(
+                          start: at(limit) - 16,
+                          width: 32,
+                          top: 0,
+                          child: Text(
+                            limit == limit.roundToDouble() ? limit.round().toString() : limit.toString(),
+                            textAlign: TextAlign.center,
+                            maxLines: 1,
+                            style: TextStyle(color: palette.textMuted, fontSize: 10.5, fontWeight: FontWeight.w700),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
+
+/// A downward triangle with a rounded tip.
+class _PointerPainter extends CustomPainter {
+  const _PointerPainter(this.color);
+
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final path = Path()
+      ..moveTo(0, 0)
+      ..lineTo(size.width, 0)
+      ..lineTo(size.width / 2 + 2, size.height - 2)
+      ..quadraticBezierTo(size.width / 2, size.height, size.width / 2 - 2, size.height - 2)
+      ..close();
+    canvas.drawPath(path, Paint()..color = color);
+  }
+
+  @override
+  bool shouldRepaint(_PointerPainter oldDelegate) => oldDelegate.color != color;
 }
 
 class _EmptyState extends StatelessWidget {

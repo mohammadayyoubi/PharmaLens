@@ -16,11 +16,15 @@ import '../theme/pharmalens_theme.dart';
 /// It only points at what the label says and asks the user to check with a
 /// doctor; it never decides a medicine is safe and never changes a dose.
 class ForYouCard extends StatelessWidget {
-  const ForYouCard({super.key, required this.medicine, required this.knowledge, required this.isArabic});
+  const ForYouCard({super.key, required this.medicine, required this.knowledge, required this.isArabic, this.profileId});
 
   final MedicinePrice medicine;
   final MedicineKnowledge? knowledge;
   final bool isArabic;
+
+  /// The person to check (e.g. the family member a scan was for); the
+  /// selected person in My Health when null or removed.
+  final String? profileId;
 
   static const Map<HealthCondition, List<String>> _keywords = {
     HealthCondition.pregnant: ['pregnan', 'حمل', 'الحامل'],
@@ -28,6 +32,12 @@ class ForYouCard extends StatelessWidget {
     HealthCondition.child: ['child', 'pediatric', 'paediatric', 'infant', 'under 12', 'أطفال', 'الطفل', 'رضع'],
     HealthCondition.kidney: ['kidney', 'renal', 'الكلى', 'كلوي'],
     HealthCondition.liver: ['liver', 'hepat', 'الكبد', 'كبدي'],
+    HealthCondition.asthma: ['asthma', 'bronchospasm', 'الربو', 'تشنج القصبات'],
+    HealthCondition.copd: ['copd', 'chronic obstructive', 'respiratory depression', 'lung', 'الرئة', 'الرئوي', 'التنفس'],
+    HealthCondition.heart: ['heart', 'cardiac', 'cardiovascular', 'القلب'],
+    HealthCondition.highBloodPressure: ['blood pressure', 'hypertension', 'ضغط الدم'],
+    HealthCondition.diabetes: ['diabet', 'blood sugar', 'glucose', 'السكري', 'سكر الدم'],
+    HealthCondition.cancer: ['cancer', 'tumor', 'tumour', 'malignan', 'chemotherapy', 'السرطان', 'الأورام', 'الكيميائي'],
   };
 
   static const List<String> _teenWords = [
@@ -109,16 +119,21 @@ class ForYouCard extends StatelessWidget {
       listenable: profile,
       builder: (context, _) {
         final palette = PharmaLensTheme.paletteOf(context);
-        final person = profile.active;
+        final person = (profileId == null ? null : profile.byId(profileId!)) ?? profile.active;
         final items = <(IconData, String, String)>[];
 
         final alerts = const MedicationSafetyService().check(
           <MedicinePrice>[medicine],
           allergies: person.allergies,
+          conditions: person.effectiveConditions,
           catalog: MophMedicineService().catalog,
         );
         for (final alert in alerts) {
-          items.add((Icons.no_food_rounded, alert.title(isArabic: isArabic), alert.message(isArabic: isArabic)));
+          items.add((
+            alert.type == SafetyAlertType.condition ? Icons.health_and_safety_outlined : Icons.no_food_rounded,
+            alert.title(isArabic: isArabic),
+            alert.message(isArabic: isArabic),
+          ));
         }
 
         final lines = _lines();
@@ -129,7 +144,7 @@ class ForYouCard extends StatelessWidget {
             ? const <HealthCondition>{}
             : <HealthCondition>{...person.conditions, if (age != null && age < 12) HealthCondition.child};
         for (final condition in conditions) {
-          final words = _keywords[condition]!;
+          final words = _keywords[condition] ?? const <String>[];
           String? match;
           if (condition == HealthCondition.pregnant || condition == HealthCondition.breastfeeding) {
             final text = isArabic && (knowledge?.pregnancyWarningAr ?? '').isNotEmpty
@@ -145,6 +160,19 @@ class ForYouCard extends StatelessWidget {
             match ??
                 appText(isArabic).theLabelInformationHereSaysNothing,
           ));
+        }
+
+        // Conditions the user typed: quote a label line naming them.
+        if (knowledge != null) {
+          for (final other in person.otherConditions) {
+            final words = other.toLowerCase().split(RegExp(r'\s+')).where((w) => w.length >= 4).toList();
+            final match = words.isEmpty ? null : _quote(lines, words);
+            items.add((
+              Icons.monitor_heart_outlined,
+              other,
+              match ?? appText(isArabic).theLabelInformationHereSaysNothing,
+            ));
+          }
         }
 
         items.addAll(_bodyItems(person, lines));
@@ -167,9 +195,7 @@ class ForYouCard extends StatelessWidget {
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      isArabic
-                          ? 'لـ${person.displayName(isArabic: true)}'
-                          : 'For ${person.isOwner ? 'you' : person.name}',
+                      person.isOwner ? appText(isArabic).forYou : appText(isArabic).forPerson(person.name),
                       style: TextStyle(color: palette.textPrimary, fontSize: 16, fontWeight: FontWeight.w900),
                     ),
                   ),

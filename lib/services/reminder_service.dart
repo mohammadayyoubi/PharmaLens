@@ -1,8 +1,10 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io' show Platform;
 import 'dart:ui' show DartPluginRegistrant;
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart' show MethodChannel;
 import 'package:flutter/widgets.dart' show AppLifecycleListener, AppLifecycleState, WidgetsBinding;
 import 'package:crypto/crypto.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
@@ -152,10 +154,27 @@ class ReminderService extends ChangeNotifier {
 
   static const String _scheduleSignatureKey = 'pharmalens_reminder_schedule_v1';
 
+  static const MethodChannel _system = MethodChannel('pharmalens/system');
+
+  /// When the phone last started, to the minute (Android only). Android
+  /// drops every scheduled alarm on restart; the notification plugin
+  /// restores them, but if a phone blocks that (no "Autostart" on some
+  /// brands), opening the app must rebuild them.
+  static Future<int> _bootMinute() async {
+    // The real OS: widget tests report Android but have no channel.
+    if (kIsWeb || !Platform.isAndroid) return 0;
+    try {
+      final bootMs = await _system.invokeMethod<int>('bootTime') ?? 0;
+      return bootMs ~/ Duration.millisecondsPerMinute;
+    } catch (_) {
+      return 0;
+    }
+  }
+
   /// Everything the scheduled notifications depend on: the reminders, their
   /// language and alarm sound, the exact-alarm permission, the time zone,
-  /// and the day (courses switch to one-off notifications as their end
-  /// comes near).
+  /// the day (courses switch to one-off notifications as their end comes
+  /// near), and the phone's start time (a reboot clears the alarms).
   Future<String> _scheduleSignature() async {
     var zone = '';
     try {
@@ -176,6 +195,7 @@ class ReminderService extends ChangeNotifier {
       exact,
       zone,
       _date(now),
+      await _bootMinute(),
     ]);
     return md5.convert(utf8.encode(source)).toString();
   }
@@ -279,6 +299,27 @@ class ReminderService extends ChangeNotifier {
 
     await _cancel(_reminders[index]);
     _reminders = List<MedicineReminder>.of(_reminders)..removeAt(index);
+    await _persist();
+    _armForegroundTimer();
+    notifyListeners();
+  }
+
+  /// Deletes every reminder and cancels its notifications ("Delete all my
+  /// data" in Settings).
+  Future<void> clearAll() async {
+    await load();
+
+    if (await _ensurePlugin()) {
+      try {
+        await _plugin.cancelAllPendingNotifications();
+      } catch (_) {
+        for (final reminder in _reminders) {
+          await _cancel(reminder);
+        }
+      }
+    }
+    _reminders = <MedicineReminder>[];
+    pendingDose.value = null;
     await _persist();
     _armForegroundTimer();
     notifyListeners();
@@ -403,7 +444,7 @@ class ReminderService extends ChangeNotifier {
           linux: LinuxInitializationSettings(defaultActionName: 'Open PharmaLens'),
           windows: WindowsInitializationSettings(
             appName: 'PharmaLens',
-            appUserModelId: 'com.codepeakstudio.pharmalens',
+            appUserModelId: 'com.techwraplb.pharmalens',
             guid: '7b3c5f0e-4f4b-4d36-9a52-1c1f8a6a2d71',
           ),
         ),

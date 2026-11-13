@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
@@ -13,10 +12,12 @@ import '../services/health_profile_service.dart';
 import '../services/reminder_service.dart';
 import '../theme/pharmalens_theme.dart';
 import '../utils/formatters.dart';
+import '../widgets/ai_notice.dart';
 import '../widgets/chatbot_view.dart';
+import '../widgets/emergency_numbers.dart';
 import '../widgets/responsive.dart';
+import '../widgets/scan_flow.dart';
 import '../widgets/sync_progress.dart';
-import 'analysis_screen.dart';
 import 'my_health_screen.dart';
 import 'settings_screen.dart';
 
@@ -30,8 +31,6 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  static const int _maximumImageBytes = 15 * 1024 * 1024;
-
   final ImagePicker _imagePicker = ImagePicker();
 
   bool _isPickingImage = false;
@@ -48,6 +47,8 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  /// Camera or gallery from the scan card; with family members saved the
+  /// scan flow first asks who the prescription is for.
   Future<void> _pickPrescriptionImage(ImageSource source) async {
     if (_isPickingImage) {
       return;
@@ -58,69 +59,7 @@ class _HomeScreenState extends State<HomeScreen> {
     });
 
     try {
-      final pickedImage = await _imagePicker.pickImage(
-        source: source,
-        // Gemini downsamples larger images anyway; a smaller upload is
-        // noticeably faster on slow connections.
-        imageQuality: 85,
-        maxWidth: 1800,
-        maxHeight: 1800,
-      );
-
-      if (pickedImage == null) {
-        return;
-      }
-
-      final fileSize = await pickedImage.length();
-
-      if (fileSize <= 0) {
-        _showSafeError(
-          appText(_isArabic).theSelectedImageIsEmptyPlease,
-        );
-
-        return;
-      }
-
-      if (fileSize > _maximumImageBytes) {
-        _showSafeError(
-          appText(_isArabic).theSelectedImageIsTooLarge,
-        );
-
-        return;
-      }
-
-      final imageBytes = await pickedImage.readAsBytes();
-
-      if (imageBytes.isEmpty) {
-        _showSafeError(
-          appText(_isArabic).theSelectedImageCouldNotBe,
-        );
-
-        return;
-      }
-
-      if (!mounted) {
-        return;
-      }
-
-      await Navigator.of(context).push(
-        MaterialPageRoute<void>(
-          builder: (_) => AnalysisScreen(
-            imagePath: pickedImage.path,
-            imageBytes: imageBytes,
-          ),
-        ),
-      );
-    } catch (error, stackTrace) {
-      _debugLog('Prescription image selection failed.', error, stackTrace);
-
-      if (!mounted) {
-        return;
-      }
-
-      _showSafeError(
-        appText(_isArabic).theImageCouldNotBeOpened,
-      );
+      await startPrescriptionScan(context, source: source);
     } finally {
       if (mounted) {
         setState(() {
@@ -148,26 +87,6 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  void _showSafeError(String message) {
-    if (!mounted) {
-      return;
-    }
-
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(message)));
-  }
-
-  void _debugLog(String message, Object error, StackTrace stackTrace) {
-    if (!kDebugMode) {
-      return;
-    }
-
-    debugPrint('$message\n$error');
-
-    debugPrintStack(stackTrace: stackTrace);
-  }
-
   @override
   Widget build(BuildContext context) {
     final palette = PharmaLensTheme.paletteOf(context);
@@ -178,7 +97,10 @@ class _HomeScreenState extends State<HomeScreen> {
       floatingActionButton: const FloatingChatbotButton(),
       body: DecoratedBox(
         decoration: BoxDecoration(gradient: palette.pageGradient),
+        // Cards scroll on under the phone's bottom bar (bottom padding
+        // below keeps the last one clear of it).
         child: SafeArea(
+          bottom: false,
           child: LayoutBuilder(
             builder: (context, constraints) {
               final twoColumns = constraints.maxWidth >= 920;
@@ -215,10 +137,16 @@ class _HomeScreenState extends State<HomeScreen> {
                   delay: const Duration(milliseconds: 280),
                   child: _DataStatusCard(isArabic: _isArabic),
                 ),
+                const SizedBox(height: 18),
+                FadeSlideIn(
+                  delay: const Duration(milliseconds: 320),
+                  child: EmergencyNumbersCard(isArabic: _isArabic),
+                ),
               ];
 
               return SingleChildScrollView(
-                padding: const EdgeInsets.only(bottom: 96),
+                // Room for the bar and the assistant button above it.
+                padding: EdgeInsets.only(bottom: 88 + MediaQuery.paddingOf(context).bottom),
                 child: PageFrame(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -281,7 +209,7 @@ class _TopBar extends StatelessWidget {
       children: [
         ClipRRect(
           borderRadius: BorderRadius.circular(12),
-          child: Image.asset('assets/branding/app_icon.png', width: 40, height: 40),
+          child: Image.asset('assets/branding/app_icon.png', width: 40, height: 40, cacheWidth: 160),
         ),
         const SizedBox(width: 10),
         // The wordmark is part of the logo: it does not grow with large
@@ -558,69 +486,93 @@ class _QuickActions extends StatelessWidget {
       (Icons.favorite_outline_rounded, appText(isArabic).myHealth, appText(isArabic).historyRemindersAllergies, AppTab.myHealth, PharmaLensColors.accentViolet),
     ];
 
+    // Every tile reserves two lines for its title and two for its subtitle,
+    // and each row stretches to its tallest tile, so all four are the same
+    // size whatever the language or text size.
+    final scaler = MediaQuery.textScalerOf(context);
+    const titleSize = 14.5, titleHeight = 1.2, subtitleSize = 11.8, subtitleHeight = 1.35;
+    final titleBox = scaler.scale(titleSize) * titleHeight * 2;
+    final subtitleBox = scaler.scale(subtitleSize) * subtitleHeight * 2;
+
+    Widget tile((IconData, String, String, AppTab, Color) action) {
+      return PressableScale(
+        child: SurfaceCard(
+          padding: const EdgeInsets.all(14),
+          onTap: () => onOpen(action.$4),
+          semanticLabel: '${action.$2}. ${action.$3}',
+          child: ExcludeSemantics(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      width: 42,
+                      height: 42,
+                      decoration: BoxDecoration(
+                        color: action.$5.withValues(alpha: PharmaLensTheme.isDark(context) ? 0.22 : 0.12),
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: Icon(action.$1, color: action.$5),
+                    ),
+                    const Spacer(),
+                    Icon(
+                      Directionality.of(context) == TextDirection.rtl ? Icons.arrow_back_rounded : Icons.arrow_forward_rounded,
+                      size: 18,
+                      color: palette.textMuted,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                ConstrainedBox(
+                  constraints: BoxConstraints(minHeight: titleBox),
+                  child: Text(
+                    action.$2,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: palette.textPrimary, fontWeight: FontWeight.w900, fontSize: titleSize, height: titleHeight),
+                  ),
+                ),
+                const SizedBox(height: 3),
+                ConstrainedBox(
+                  constraints: BoxConstraints(minHeight: subtitleBox),
+                  child: Text(
+                    action.$3,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: palette.textSecondary, fontSize: subtitleSize, height: subtitleHeight, fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
     return LayoutBuilder(
       builder: (context, constraints) {
         final columns = constraints.maxWidth >= 620 ? 4 : 2;
         const spacing = 12.0;
-        final tileWidth = (constraints.maxWidth - spacing * (columns - 1)) / columns;
 
-        Widget tile((IconData, String, String, AppTab, Color) action) {
-          return SizedBox(
-            width: tileWidth,
-            child: PressableScale(
-              child: SurfaceCard(
-                padding: const EdgeInsets.all(14),
-                onTap: () => onOpen(action.$4),
-                semanticLabel: '${action.$2}. ${action.$3}',
-                child: ExcludeSemantics(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Container(
-                            width: 42,
-                            height: 42,
-                            decoration: BoxDecoration(
-                              color: action.$5.withValues(alpha: PharmaLensTheme.isDark(context) ? 0.22 : 0.12),
-                              borderRadius: BorderRadius.circular(14),
-                            ),
-                            child: Icon(action.$1, color: action.$5),
-                          ),
-                          const Spacer(),
-                          Icon(
-                            Directionality.of(context) == TextDirection.rtl ? Icons.arrow_back_rounded : Icons.arrow_forward_rounded,
-                            size: 18,
-                            color: palette.textMuted,
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-                      // Two lines so "Nearby pharmacies" is never cut.
-                      Text(
-                        action.$2,
-                        maxLines: 2,
-                        style: TextStyle(color: palette.textPrimary, fontWeight: FontWeight.w900, fontSize: 14.5, height: 1.2),
-                      ),
-                      const SizedBox(height: 3),
-                      Text(
-                        action.$3,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(color: palette.textSecondary, fontSize: 11.8, height: 1.35, fontWeight: FontWeight.w600),
-                      ),
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            for (var start = 0; start < actions.length; start += columns) ...[
+              if (start > 0) const SizedBox(height: spacing),
+              IntrinsicHeight(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    for (var i = start; i < start + columns; i++) ...[
+                      if (i > start) const SizedBox(width: spacing),
+                      Expanded(child: i < actions.length ? tile(actions[i]) : const SizedBox.shrink()),
                     ],
-                  ),
+                  ],
                 ),
               ),
-            ),
-          );
-        }
-
-        return Wrap(
-          spacing: spacing,
-          runSpacing: spacing,
-          children: [for (final action in actions) tile(action)],
+            ],
+          ],
         );
       },
     );
@@ -670,7 +622,7 @@ class _TodayDoses extends StatelessWidget {
               if (doses.isEmpty)
                 Row(
                   children: [
-                    Image.asset('assets/images/reminder_illustration.png', width: 64, height: 64),
+                    Image.asset('assets/images/reminder_illustration.png', width: 64, height: 64, cacheWidth: 256),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Text(
@@ -1035,17 +987,35 @@ class _SafetyFooter extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final palette = PharmaLensTheme.paletteOf(context);
+    final text = appText(isArabic);
+    final style = TextStyle(color: palette.textMuted, fontSize: 12, height: 1.45, fontWeight: FontWeight.w600);
 
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Icon(Icons.shield_outlined, color: palette.textMuted, size: 18),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Text(
-            appText(isArabic).pharmalensHelpsYouReviewChangingOr,
-            style: TextStyle(color: palette.textMuted, fontSize: 12, height: 1.45, fontWeight: FontWeight.w600),
-          ),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(Icons.shield_outlined, color: palette.textMuted, size: 18),
+            const SizedBox(width: 8),
+            Expanded(child: Text(text.pharmalensHelpsYouReviewChangingOr, style: style)),
+          ],
+        ),
+        const SizedBox(height: 8),
+        AiNotice(isArabic: isArabic, compact: true),
+        const SizedBox(height: 8),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(Icons.info_outline_rounded, color: palette.textMuted, size: 18),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                '${text.anIndividualInitiative} · ${text.notTheMophAppShort} · ${text.officialMophPricesSource}',
+                style: style,
+              ),
+            ),
+          ],
         ),
       ],
     );

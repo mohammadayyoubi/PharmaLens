@@ -4,6 +4,7 @@ import 'package:pharmalens/models/ai_handwriting_result.dart';
 import 'package:pharmalens/models/medicine_price.dart';
 import 'package:pharmalens/models/medicine_reminder.dart';
 import 'package:pharmalens/models/verified_medicine_result.dart';
+import 'package:pharmalens/services/health_profile_service.dart';
 import 'package:pharmalens/services/medical_domain_guard_service.dart';
 import 'package:pharmalens/services/medication_safety_service.dart';
 import 'package:pharmalens/services/medicine_verification_service.dart';
@@ -149,6 +150,76 @@ void main() {
     test('unknown allergy text is reported as unrecognized', () {
       expect(MedicationSafetyService.isRecognizedAllergy('Amoxicillin', MophMedicineService().catalog), isTrue);
       expect(MedicationSafetyService.isRecognizedAllergy('xyzzy', MophMedicineService().catalog), isFalse);
+    });
+  });
+
+  group('health conditions', () {
+    const safety = MedicationSafetyService();
+    List<MedicinePrice> real(String atcPrefix) =>
+        MophMedicineService().catalog.where((m) => (m.atcCode ?? '').toUpperCase().startsWith(atcPrefix)).toList();
+    List<SafetyAlert> conditionAlerts(List<SafetyAlert> alerts) =>
+        alerts.where((a) => a.type == SafetyAlertType.condition).toList();
+
+    test('a beta blocker from the MOPH list warns someone with asthma', () {
+      final propranolol = real('C07AA05').first;
+      final alerts = conditionAlerts(safety.check(<MedicinePrice>[propranolol], conditions: {HealthCondition.asthma}));
+      expect(alerts, hasLength(1));
+      expect(alerts.single.condition, HealthCondition.asthma);
+      expect(alerts.single.title(isArabic: false), 'Check with your doctor: Asthma');
+      expect(alerts.single.message(isArabic: false), contains(propranolol.brandName));
+      expect(alerts.single.title(isArabic: true), contains('الربو'));
+      expect(alerts.single.message(isArabic: true), contains('من مجموعة حاصرات بيتا'));
+    });
+
+    test('a cardioselective beta blocker warns for asthma but not for COPD', () {
+      final bisoprolol = real('C07AB07').first;
+      expect(conditionAlerts(safety.check(<MedicinePrice>[bisoprolol], conditions: {HealthCondition.asthma})), hasLength(1));
+      expect(conditionAlerts(safety.check(<MedicinePrice>[bisoprolol], conditions: {HealthCondition.copd})), isEmpty);
+    });
+
+    test('NSAIDs warn for kidney disease, and nothing is said without conditions', () {
+      final ibuprofen = real('M01AE01').first;
+      expect(conditionAlerts(safety.check(<MedicinePrice>[ibuprofen], conditions: {HealthCondition.kidney})), hasLength(1));
+      expect(conditionAlerts(safety.check(<MedicinePrice>[ibuprofen])), isEmpty);
+    });
+
+    test('dextromethorphan cough syrup is not called codeine for a child', () {
+      final dextromethorphan = real('R05DA').where((m) => !(m.atcCode ?? '').toUpperCase().startsWith('R05DA04')).toList();
+      expect(dextromethorphan, isNotEmpty);
+      expect(conditionAlerts(safety.check(dextromethorphan, conditions: {HealthCondition.child})), isEmpty);
+    });
+
+    test('an age under 12 counts as a child, so tramadol gets an alert', () {
+      final child = HealthProfile(id: 'p1', name: 'Kid', birthYear: DateTime.now().year - 8);
+      expect(child.effectiveConditions, contains(HealthCondition.child));
+      final tramadol = real('N02AX02').first;
+      final alerts = conditionAlerts(safety.check(<MedicinePrice>[tramadol], conditions: child.effectiveConditions));
+      expect(alerts.single.condition, HealthCondition.child);
+    });
+
+    test('a possible match gets a condition alert worded as uncertain', () {
+      final ibuprofen = real('M01AE01').first;
+      final alerts = conditionAlerts(safety.check(
+        const <MedicinePrice>[],
+        conditions: {HealthCondition.pregnant},
+        possible: <MedicinePrice>[ibuprofen],
+      ));
+      expect(alerts.single.uncertain, isTrue);
+      expect(alerts.single.message(isArabic: false), startsWith('If this line is'));
+    });
+
+    test('every condition rule matches products in the MOPH list', () {
+      for (final prefixes in MedicationSafetyService.conditionRulePrefixes) {
+        expect(prefixes.any((p) => real(p).isNotEmpty), isTrue, reason: 'no product for $prefixes');
+      }
+    });
+
+    test('profiles keep their typed conditions', () {
+      const person = HealthProfile(id: 'p2', name: 'Mom', conditions: {HealthCondition.cancer}, otherConditions: ['Epilepsy']);
+      final restored = HealthProfile.fromJson(person.toJson())!;
+      expect(restored.conditions, {HealthCondition.cancer});
+      expect(restored.otherConditions, ['Epilepsy']);
+      expect(restored.conditionNames(isArabic: false), ['Cancer', 'Epilepsy']);
     });
   });
 

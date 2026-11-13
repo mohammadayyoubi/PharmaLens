@@ -11,6 +11,7 @@ import '../services/moph_medicine_service.dart';
 import '../theme/pharmalens_theme.dart';
 import '../utils/formatters.dart';
 import '../widgets/chatbot_view.dart';
+import '../widgets/responsive.dart';
 import '../widgets/sync_progress.dart';
 
 class MedicineSearchScreen extends StatefulWidget {
@@ -427,34 +428,6 @@ class _MedicineSearchScreenState
       child: Scaffold(
         backgroundColor: palette.background,
         floatingActionButton: const FloatingChatbotButton(),
-        appBar: AppBar(
-          title: Text(
-            widget.selectionMode
-                ? appText(_isArabic).selectMedicine2
-                : appText(_isArabic).medicineSearch,
-            style:
-            const TextStyle(
-              fontWeight:
-              FontWeight.w800,
-            ),
-          ),
-          centerTitle: true,
-          actions: [
-            MophSyncButton(
-              tooltip: appText(_isArabic).syncMophLebanonPrices,
-              color: palette.textPrimary,
-              onPressed: _syncMophPrices,
-            ),
-          ],
-          backgroundColor:
-          palette.surface,
-          surfaceTintColor:
-          Colors.transparent,
-          foregroundColor:
-          palette.textPrimary,
-          elevation: 0,
-          scrolledUnderElevation: 0,
-        ),
         body: DecoratedBox(
           decoration: BoxDecoration(
             gradient:
@@ -501,20 +474,8 @@ class _MedicineSearchScreenState
       context,
     );
 
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
-      decoration: BoxDecoration(
-        color: palette.surface,
-        border: Border(
-          bottom: BorderSide(
-            color:
-            palette.border,
-          ),
-        ),
-        boxShadow:
-        palette.cardShadow,
-      ),
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
       child: Center(
         child: ConstrainedBox(
           constraints:
@@ -523,7 +484,7 @@ class _MedicineSearchScreenState
           ),
           child: Column(
             crossAxisAlignment:
-            CrossAxisAlignment.start,
+            CrossAxisAlignment.stretch,
             children: [
               if (widget
                   .selectionMode) ...[
@@ -595,22 +556,39 @@ class _MedicineSearchScreenState
                 ),
               ],
 
-              Text(
-                widget.selectionMode
+              GradientPageHeader(
+                icon: Icons.medication_rounded,
+                title: widget.selectionMode
                     ? appText(_isArabic).findTheExactProduct
                     : appText(_isArabic).lebaneseMedicineDatabase,
-                style: TextStyle(color: palette.textPrimary, fontSize: 17, height: 1.2, fontWeight: FontWeight.w900),
+                subtitle: appText(_isArabic).searchByBrandOrActiveIngredient,
+                actions: [
+                  // White on the gradient instead of the theme's white button.
+                  IconButtonTheme(
+                    data: IconButtonThemeData(
+                      style: IconButton.styleFrom(
+                        backgroundColor: Colors.white.withValues(alpha: 0.12),
+                        side: BorderSide(color: Colors.white.withValues(alpha: 0.18)),
+                      ),
+                    ),
+                    child: MophSyncButton(
+                      tooltip: appText(_isArabic).syncMophLebanonPrices,
+                      color: Colors.white,
+                      onPressed: _syncMophPrices,
+                    ),
+                  ),
+                ],
+                bottom: _buildSearchRow(palette),
               ),
-              const SizedBox(height: 2),
-              Text(
-                appText(_isArabic).searchByBrandOrActiveIngredient,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(color: palette.textSecondary, fontSize: 12.5, fontWeight: FontWeight.w500),
-              ),
-              const SizedBox(height: 10),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 
-              Builder(
+  Widget _buildSearchRow(PharmaLensPalette palette) {
+    return Builder(
                 builder: (context) {
                   final searchField =
                   TextField(
@@ -702,11 +680,6 @@ class _MedicineSearchScreenState
                     ],
                   );
                 },
-              ),
-            ],
-          ),
-        ),
-      ),
     );
   }
 
@@ -793,8 +766,6 @@ class _MedicineSearchScreenState
           return _MedicineCard(
             medicine:
             medicine,
-            resultNumber:
-            resultIndex + 1,
             selectionMode:
             widget.selectionMode,
             isArabic:
@@ -842,7 +813,7 @@ class _MedicineSearchScreenState
                 ) {
               return SizedBox(
                 height:
-                index == 0 ? 12 : 14,
+                index == 0 ? 12 : 10,
               );
             },
             itemBuilder: (
@@ -1025,11 +996,12 @@ class _ResultsSummary
   }
 }
 
-class _MedicineCard
-    extends StatelessWidget {
+/// One search result: name and ingredient, the official price beside them,
+/// then strength, form and pack as small chips. The whole card opens the
+/// medicine; "Select" appears only when picking a product for a scan.
+class _MedicineCard extends StatelessWidget {
   const _MedicineCard({
     required this.medicine,
-    required this.resultNumber,
     required this.selectionMode,
     required this.isArabic,
     required this.onOpenDetails,
@@ -1037,479 +1009,156 @@ class _MedicineCard
   });
 
   final MedicinePrice medicine;
-
-  final int resultNumber;
-
   final bool selectionMode;
   final bool isArabic;
-
   final VoidCallback onOpenDetails;
   final VoidCallback? onSelect;
 
   @override
   Widget build(BuildContext context) {
-    final palette =
-    PharmaLensTheme.paletteOf(
-      context,
-    );
+    final palette = PharmaLensTheme.paletteOf(context);
+    final isDark = PharmaLensTheme.isDark(context);
+    final radius = BorderRadius.circular(18);
+    final generic = medicine.genericName?.trim() ?? '';
+    final chips = <String>[
+      if (medicine.hasStrength) medicine.displayStrength,
+      if (medicine.hasDosageForm) medicine.displayDosageForm,
+      if (medicine.hasPackSize) medicine.displayPackSize,
+    ];
 
-    final borderRadius =
-    BorderRadius.circular(
-      20,
-    );
-
-    final genericName =
-        medicine
-            .genericName
-            ?.trim() ??
-            '';
-
-    return Card(
-      elevation: 0,
-      margin: EdgeInsets.zero,
-      color: palette.surface,
-      surfaceTintColor:
-      Colors.transparent,
-      shape:
-      RoundedRectangleBorder(
-        borderRadius:
-        borderRadius,
-        side: BorderSide(
-          color:
-          palette.border,
+    Widget chip(String value) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+        decoration: BoxDecoration(
+          color: palette.surfaceSoft,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: palette.borderSoft),
         ),
-      ),
-      clipBehavior:
-      Clip.antiAlias,
+        child: Text(
+          value,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          textDirection: TextDirection.ltr,
+          style: TextStyle(color: palette.textSecondary, fontSize: 11.5, fontWeight: FontWeight.w700),
+        ),
+      );
+    }
+
+    return Material(
+      color: palette.surface,
+      borderRadius: radius,
       child: InkWell(
-        onTap:
-        onOpenDetails,
-        borderRadius:
-        borderRadius,
-        child: Padding(
-          padding:
-          const EdgeInsets.all(
-            17,
+        onTap: onOpenDetails,
+        borderRadius: radius,
+        child: Ink(
+          decoration: BoxDecoration(
+            borderRadius: radius,
+            border: Border.all(color: palette.border),
           ),
+          padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
           child: Column(
-            crossAxisAlignment:
-            CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Row(
-                crossAxisAlignment:
-                CrossAxisAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Container(
-                    width: 48,
-                    height: 48,
-                    alignment:
-                    Alignment.center,
-                    decoration:
-                    BoxDecoration(
-                      color:
-                      palette
-                          .tealSurface,
-                      borderRadius:
-                      BorderRadius.circular(
-                        14,
-                      ),
-                    ),
-                    child: Icon(
-                      _medicineIcon(
-                        medicine
-                            .dosageForm,
-                      ),
-                      color:
-                      PharmaLensColors
-                          .teal,
-                    ),
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(color: palette.tealSurface, borderRadius: BorderRadius.circular(12)),
+                    child: Icon(_medicineIcon(medicine.dosageForm), color: PharmaLensColors.teal, size: 21),
                   ),
-
-                  const SizedBox(
-                    width: 13,
-                  ),
-
+                  const SizedBox(width: 10),
                   Expanded(
                     child: Column(
-                      crossAxisAlignment:
-                      CrossAxisAlignment
-                          .start,
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          medicine
-                              .brandName,
-                          textDirection:
-                          TextDirection
-                              .ltr,
-                          style:
-                          TextStyle(
-                            color:
-                            palette
-                                .textPrimary,
-                            fontSize:
-                            19,
-                            height:
-                            1.2,
-                            fontWeight:
-                            FontWeight
-                                .w900,
-                          ),
+                          medicine.brandName,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          textDirection: TextDirection.ltr,
+                          style: TextStyle(color: palette.textPrimary, fontSize: 15.5, height: 1.2, fontWeight: FontWeight.w900),
                         ),
-
-                        if (genericName
-                            .isNotEmpty) ...[
-                          const SizedBox(
-                            height: 5,
-                          ),
+                        if (generic.isNotEmpty) ...[
+                          const SizedBox(height: 2),
                           Text(
-                            genericName,
-                            textDirection:
-                            TextDirection
-                                .ltr,
-                            style:
-                            TextStyle(
-                              color:
-                              palette
-                                  .textSecondary,
-                              height:
-                              1.3,
-                              fontWeight:
-                              FontWeight
-                                  .w700,
-                            ),
+                            generic,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            textDirection: TextDirection.ltr,
+                            style: TextStyle(color: palette.textSecondary, fontSize: 12.5, fontWeight: FontWeight.w600),
                           ),
                         ],
                       ],
                     ),
                   ),
-
-                  const SizedBox(
-                    width: 8,
-                  ),
-
+                  const SizedBox(width: 8),
+                  // The official price, the thing people look for first.
                   Container(
-                    padding:
-                    const EdgeInsets.symmetric(
-                      horizontal: 9,
-                      vertical: 6,
-                    ),
-                    decoration:
-                    BoxDecoration(
-                      color:
-                      palette
-                          .surfaceSoft,
-                      borderRadius:
-                      BorderRadius.circular(
-                        20,
-                      ),
-                      border:
-                      Border.all(
-                        color:
-                        palette
-                            .borderSoft,
-                      ),
+                    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: PharmaLensColors.teal.withValues(alpha: isDark ? 0.18 : 0.09),
+                      borderRadius: BorderRadius.circular(10),
                     ),
                     child: Text(
-                      '#$resultNumber',
-                      style:
-                      TextStyle(
-                        color:
-                        palette
-                            .textSecondary,
-                        fontWeight:
-                        FontWeight
-                            .w800,
-                      ),
+                      medicine.formattedPrice,
+                      textDirection: TextDirection.ltr,
+                      style: const TextStyle(color: PharmaLensColors.teal, fontSize: 13.5, fontWeight: FontWeight.w900),
                     ),
                   ),
                 ],
               ),
-
-              const SizedBox(
-                height: 13,
-              ),
-
-              Wrap(
-                spacing: 7,
-                runSpacing: 7,
-                children: [
-                  if (medicine
-                      .hasStrength)
-                    _MedicineTag(
-                      icon: Icons
-                          .science_outlined,
-                      text: medicine
-                          .displayStrength,
-                    ),
-
-                  if (medicine
-                      .hasDosageForm)
-                    _MedicineTag(
-                      icon: Icons
-                          .medication_liquid_outlined,
-                      text: medicine
-                          .displayDosageForm,
-                    ),
-
-                  if (medicine
-                      .hasPackSize)
-                    _MedicineTag(
-                      icon: Icons
-                          .inventory_2_outlined,
-                      text: medicine
-                          .displayPackSize,
-                    ),
-
-                  if (medicine
-                      .isOfficialSource)
-                    _MedicineTag(
-                      icon: Icons
-                          .verified_outlined,
-                      text: appText(isArabic).officialSource,
-                      accent:
-                      PharmaLensColors
-                          .teal,
-                    ),
-                ],
-              ),
-
-              const SizedBox(
-                height: 13,
-              ),
-
-              _PriceSummary(
-                medicine:
-                medicine,
-                isArabic:
-                isArabic,
-              ),
-
-              if (medicine
-                  .hasManufacturer) ...[
-                const SizedBox(
-                  height: 11,
-                ),
-                _DetailLine(
-                  icon: Icons
-                      .factory_outlined,
-                  label: appText(isArabic).manufacturer,
-                  value: medicine
-                      .displayManufacturer,
+              if (chips.isNotEmpty || medicine.hasManufacturer) ...[
+                const SizedBox(height: 10),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [for (final value in chips) chip(value)],
                 ),
               ],
-
-              const SizedBox(
-                height: 14,
-              ),
-
-              LayoutBuilder(
-                builder: (
-                    context,
-                    constraints,
-                    ) {
-                  final narrow =
-                      constraints.maxWidth <
-                          350;
-
-                  final details =
-                  OutlinedButton.icon(
-                    onPressed:
-                    onOpenDetails,
-                    icon:
-                    const Icon(
-                      Icons
-                          .receipt_long_outlined,
-                    ),
-                    label: Text(
-                      appText(isArabic).details,
-                    ),
-                  );
-
-                  final select =
-                  selectionMode
-                      ? FilledButton.icon(
-                    onPressed:
-                    onSelect,
-                    icon:
-                    const Icon(
-                      Icons
-                          .touch_app_rounded,
-                    ),
-                    label:
-                    Text(
-                      appText(isArabic).selectMedicine3,
-                    ),
-                  )
-                      : null;
-
-                  if (select == null) {
-                    return SizedBox(
-                      width:
-                      double.infinity,
-                      child:
-                      details,
-                    );
-                  }
-
-                  if (narrow) {
-                    return Column(
-                      children: [
-                        SizedBox(
-                          width:
-                          double.infinity,
-                          child:
-                          details,
-                        ),
-                        const SizedBox(
-                          height: 9,
-                        ),
-                        SizedBox(
-                          width:
-                          double.infinity,
-                          child:
-                          select,
-                        ),
-                      ],
-                    );
-                  }
-
-                  return Row(
-                    children: [
-                      Expanded(
-                        child:
-                        details,
+              if (medicine.hasManufacturer) ...[
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Icon(Icons.factory_outlined, size: 14, color: palette.textMuted),
+                    const SizedBox(width: 5),
+                    Expanded(
+                      child: Text(
+                        medicine.displayManufacturer,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        textDirection: TextDirection.ltr,
+                        textAlign: isArabic ? TextAlign.right : TextAlign.left,
+                        style: TextStyle(color: palette.textMuted, fontSize: 11.5, fontWeight: FontWeight.w600),
                       ),
-                      const SizedBox(
-                        width: 10,
-                      ),
-                      Expanded(
-                        child:
-                        select,
-                      ),
-                    ],
-                  );
-                },
-              ),
+                    ),
+                  ],
+                ),
+              ],
+              if (selectionMode) ...[
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    TextButton.icon(
+                      onPressed: onOpenDetails,
+                      icon: const Icon(Icons.receipt_long_outlined, size: 18),
+                      label: Text(appText(isArabic).details),
+                    ),
+                    const Spacer(),
+                    FilledButton.icon(
+                      onPressed: onSelect,
+                      style: FilledButton.styleFrom(minimumSize: const Size(0, 40), padding: const EdgeInsets.symmetric(horizontal: 14)),
+                      icon: const Icon(Icons.touch_app_rounded, size: 18),
+                      label: Text(appText(isArabic).selectMedicine3),
+                    ),
+                  ],
+                ),
+              ],
             ],
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _PriceSummary
-    extends StatelessWidget {
-  const _PriceSummary({
-    required this.medicine,
-    required this.isArabic,
-  });
-
-  final MedicinePrice medicine;
-  final bool isArabic;
-
-  @override
-  Widget build(BuildContext context) {
-    final palette =
-    PharmaLensTheme.paletteOf(
-      context,
-    );
-
-    final isDark =
-    PharmaLensTheme.isDark(
-      context,
-    );
-
-    return Container(
-      width: double.infinity,
-      padding:
-      const EdgeInsets.symmetric(
-        horizontal: 13,
-        vertical: 12,
-      ),
-      decoration: BoxDecoration(
-        color:
-        PharmaLensColors.teal
-            .withValues(
-          alpha:
-          isDark
-              ? 0.16
-              : 0.08,
-        ),
-        borderRadius:
-        BorderRadius.circular(
-          14,
-        ),
-      ),
-      child: Row(
-        children: [
-          const Icon(
-            Icons.payments_outlined,
-            color:
-            PharmaLensColors
-                .teal,
-          ),
-
-          const SizedBox(
-            width: 10,
-          ),
-
-          Expanded(
-            child: Column(
-              crossAxisAlignment:
-              CrossAxisAlignment.start,
-              children: [
-                Text(
-                  appText(isArabic).recordedPrice,
-                  style:
-                  TextStyle(
-                    color:
-                    palette
-                        .textSecondary,
-                    fontSize: 11,
-                    fontWeight:
-                    FontWeight
-                        .w700,
-                  ),
-                ),
-
-                if (medicine
-                    .hasEffectiveDate)
-                  Text(
-                    medicine
-                        .formattedEffectiveDate,
-                    textDirection:
-                    TextDirection
-                        .ltr,
-                    style:
-                    TextStyle(
-                      color:
-                      palette
-                          .textMuted,
-                      fontSize:
-                      10.5,
-                    ),
-                  ),
-              ],
-            ),
-          ),
-
-          Text(
-            medicine
-                .formattedPrice,
-            textDirection:
-            TextDirection.ltr,
-            style:
-            const TextStyle(
-              color:
-              PharmaLensColors
-                  .teal,
-              fontSize: 18,
-              fontWeight:
-              FontWeight.w900,
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -1693,141 +1342,6 @@ class _ConfirmationRow
           ),
         ],
       ),
-    );
-  }
-}
-
-class _MedicineTag
-    extends StatelessWidget {
-  const _MedicineTag({
-    required this.icon,
-    required this.text,
-    this.accent,
-  });
-
-  final IconData icon;
-  final String text;
-  final Color? accent;
-
-  @override
-  Widget build(BuildContext context) {
-    final palette =
-    PharmaLensTheme.paletteOf(
-      context,
-    );
-
-    final color =
-        accent ??
-            palette.textSecondary;
-
-    return Container(
-      padding:
-      const EdgeInsets.symmetric(
-        horizontal: 9,
-        vertical: 6,
-      ),
-      decoration: BoxDecoration(
-        color:
-        palette.surfaceSoft,
-        borderRadius:
-        BorderRadius.circular(
-          999,
-        ),
-        border: Border.all(
-          color:
-          palette.borderSoft,
-        ),
-      ),
-      child: Row(
-        mainAxisSize:
-        MainAxisSize.min,
-        children: [
-          Icon(
-            icon,
-            size: 14,
-            color: color,
-          ),
-          const SizedBox(
-            width: 5,
-          ),
-          Text(
-            text,
-            textDirection:
-            TextDirection.ltr,
-            style:
-            TextStyle(
-              color: color,
-              fontSize: 11,
-              fontWeight:
-              FontWeight.w700,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _DetailLine
-    extends StatelessWidget {
-  const _DetailLine({
-    required this.icon,
-    required this.label,
-    required this.value,
-  });
-
-  final IconData icon;
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    final palette =
-    PharmaLensTheme.paletteOf(
-      context,
-    );
-
-    return Row(
-      crossAxisAlignment:
-      CrossAxisAlignment.start,
-      children: [
-        Icon(
-          icon,
-          size: 18,
-          color:
-          palette.textMuted,
-        ),
-        const SizedBox(
-          width: 8,
-        ),
-        Text(
-          '$label: ',
-          style:
-          TextStyle(
-            color:
-            palette
-                .textSecondary,
-            fontSize: 11.5,
-            fontWeight:
-            FontWeight.w600,
-          ),
-        ),
-        Expanded(
-          child: Text(
-            value,
-            textDirection:
-            TextDirection.ltr,
-            style:
-            TextStyle(
-              color:
-              palette.textPrimary,
-              fontSize: 11.5,
-              fontWeight:
-              FontWeight.w700,
-            ),
-          ),
-        ),
-      ],
     );
   }
 }

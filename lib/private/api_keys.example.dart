@@ -7,11 +7,16 @@ class GeminiPrivateConfig {
   ];
 
   static const List<String> geminiModels = [
-    // Fastest first (measured 2-4 s per prescription).
-    'gemini-3.5-flash-lite',
-
-    'gemini-3.1-flash-lite',
+    // Strongest first. When its quota is used up (HTTP 429) the app moves
+    // on to the next model automatically, so the Flash-Lite models keep
+    // scans working on the free tier (Flash allows far fewer requests a day).
     'gemini-3.5-flash',
+
+    // Fast fallbacks with a larger free daily quota.
+    'gemini-3.5-flash-lite',
+    'gemini-3.1-flash-lite',
+
+    // Google alias for the latest Flash.
     'gemini-flash-latest',
   ];
 }

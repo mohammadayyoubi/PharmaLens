@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:pharmalens/app/app_shell.dart';
 import 'package:pharmalens/l10n/app_localizations.dart';
 import 'package:pharmalens/theme/pharmalens_theme.dart';
+import 'package:pharmalens/widgets/official_notice.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 Widget app({Locale locale = const Locale('en')}) {
@@ -28,18 +29,91 @@ Future<void> setSize(WidgetTester tester, Size size) async {
 
 void main() {
   setUp(() {
-    SharedPreferences.setMockInitialValues(<String, Object>{});
+    // The launch notices are tested on their own below.
+    SharedPreferences.setMockInitialValues(<String, Object>{OfficialNoticeCard.seenKey: true});
+    startupNoticeShown = true;
   });
 
-  testWidgets('phone layout uses bottom navigation', (tester) async {
+  testWidgets('phone layout uses the bottom bar with a Scan button', (tester) async {
     await setSize(tester, const Size(390, 844));
     await tester.pumpWidget(app());
     await tester.pump();
 
-    expect(find.byType(NavigationBar), findsOneWidget);
+    expect(find.byKey(const Key('phone-nav')), findsOneWidget);
+    expect(find.byKey(const Key('scan-button')), findsOneWidget);
     expect(find.byType(NavigationRail), findsNothing);
     expect(find.text('Read your prescription'), findsOneWidget);
+    expect(find.text('Scan'), findsOneWidget);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('the Scan button asks for camera or gallery', (tester) async {
+    await setSize(tester, const Size(390, 844));
+    await tester.pumpWidget(app());
+    await tester.pump();
+
+    await tester.tap(find.byKey(const Key('scan-button')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Scan a prescription'), findsWidgets);
+    expect(find.text('Who is this prescription for?'), findsOneWidget);
+    expect(find.text('Choose from gallery'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('bottom bar labels stay on one line on a narrow phone with large text', (tester) async {
+    await setSize(tester, const Size(320, 640));
+    tester.platformDispatcher.textScaleFactorTestValue = 1.6;
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+    await tester.pumpWidget(app(locale: const Locale('ar')));
+    await tester.pump();
+
+    final bar = find.byKey(const Key('phone-nav'));
+    final labels = find.descendant(of: bar, matching: find.byType(Text));
+    expect(labels, findsNWidgets(5));
+    for (final element in labels.evaluate()) {
+      final height = tester.getSize(find.byWidget(element.widget)).height;
+      expect(height, lessThan(30), reason: '${(element.widget as Text).data} wrapped ($height px)');
+    }
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('each launch starts with the "AI can make mistakes" acknowledgement', (tester) async {
+    startupNoticeShown = false;
+    await setSize(tester, const Size(390, 844));
+    await tester.pumpWidget(app());
+    await tester.pumpAndSettle();
+
+    expect(find.text('Before you start'), findsOneWidget);
+    expect(find.textContaining('AI can make mistakes'), findsWidgets);
+    await tester.tap(find.text('I understand'));
+    await tester.pumpAndSettle();
+    expect(find.text('Before you start'), findsNothing);
+  });
+
+  testWidgets('the bottom bar hides while the keyboard is open', (tester) async {
+    await setSize(tester, const Size(390, 844));
+    tester.view.viewInsets = const FakeViewPadding(bottom: 300);
+    addTearDown(tester.view.resetViewInsets);
+    await tester.pumpWidget(app());
+    await tester.pump();
+
+    expect(find.byKey(const Key('phone-nav')), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('existing users see the "not the MOPH app" notice once', (tester) async {
+    SharedPreferences.setMockInitialValues(<String, Object>{});
+    startupNoticeShown = false;
+    await setSize(tester, const Size(390, 844));
+    await tester.pumpWidget(app());
+    await tester.pumpAndSettle();
+
+    expect(find.text('Not an official MOPH app'), findsOneWidget);
+    await tester.tap(find.text('I understand'));
+    await tester.pumpAndSettle();
+    expect(find.text('Not an official MOPH app'), findsNothing);
+    expect((await SharedPreferences.getInstance()).getBool(OfficialNoticeCard.seenKey), isTrue);
   });
 
   testWidgets('tablet layout uses a navigation rail', (tester) async {
@@ -48,7 +122,7 @@ void main() {
     await tester.pump();
 
     expect(find.byType(NavigationRail), findsOneWidget);
-    expect(find.byType(NavigationBar), findsNothing);
+    expect(find.byKey(const Key('phone-nav')), findsNothing);
     expect(tester.takeException(), isNull);
   });
 

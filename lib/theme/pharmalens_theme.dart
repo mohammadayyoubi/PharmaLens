@@ -58,6 +58,14 @@ class PharmaLensColors {
   static const Color accentPurple = Color(0xFF7457E8);
   static const Color accentPink = Color(0xFFD95A91);
 
+  // BMI scale (My Health), from underweight to obesity class III.
+  static const Color bmiUnderweight = Color(0xFF3FA2E8);
+  static const Color bmiHealthy = Color(0xFF1FA35C);
+  static const Color bmiOverweight = Color(0xFFF5B52E);
+  static const Color bmiObesity1 = Color(0xFFF2892F);
+  static const Color bmiObesity2 = Color(0xFFE9572F);
+  static const Color bmiObesity3 = Color(0xFFD9214A);
+
   // Map placeholders and the selected pin.
   static const Color mapTileLight = Color(0xFFE8F1F5);
   static const Color mapTileDark = Color(0xFF0F1E28);

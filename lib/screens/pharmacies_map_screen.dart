@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
@@ -55,6 +57,85 @@ class _PharmaciesMapScreenState extends State<PharmaciesMapScreen> {
   bool _started = false;
 
   String _lastLanguageCode = '';
+
+  /// Typing filters the pharmacies shown; Search asks Google Places for
+  /// pharmacies matching the text anywhere in Lebanon.
+  final TextEditingController _searchController = TextEditingController();
+
+  /// Results of the last submitted search, or null for the nearby list.
+  List<NearbyHealthcarePlace>? _searchResults;
+
+  String _searchedQuery = '';
+
+  bool _isSearching = false;
+
+  /// What the map and the list show: the search results or the nearby
+  /// pharmacies, narrowed to the text typed since.
+  List<NearbyHealthcarePlace> get _visiblePlaces {
+    final base = _searchResults ?? _places;
+    final typed = _searchController.text.trim().toLowerCase();
+    if (typed.isEmpty || typed == _searchedQuery.toLowerCase()) return base;
+    return base
+        .where((p) => p.name.toLowerCase().contains(typed) || p.address.toLowerCase().contains(typed))
+        .toList(growable: false);
+  }
+
+  Future<void> _searchPharmacies() async {
+    final query = _searchController.text.trim();
+    if (query.isEmpty) {
+      _clearSearch();
+      return;
+    }
+    FocusScope.of(context).unfocus();
+    final requestId = ++_requestSerial;
+    setState(() {
+      _isSearching = true;
+      _errorMessage = '';
+      _selectedPlace = null;
+    });
+    try {
+      final results = await _service.searchPharmacies(
+        query: query,
+        languageCode: _languageCode,
+        latitude: _userPosition?.latitude,
+        longitude: _userPosition?.longitude,
+      );
+      if (!_isCurrentRequest(requestId)) return;
+      setState(() {
+        _searchResults = results;
+        _searchedQuery = query;
+        _isSearching = false;
+      });
+      if (results.isNotEmpty) {
+        _universalMapController.animateTo(results.first.latitude, results.first.longitude, zoom: 13.5);
+      }
+    } on NearbyHealthcareException catch (error) {
+      if (!_isCurrentRequest(requestId)) return;
+      setState(() {
+        _isSearching = false;
+        _errorMessage = error.message;
+      });
+    } catch (error, stackTrace) {
+      _debugLog('Pharmacy search failed.', error, stackTrace);
+      if (!_isCurrentRequest(requestId)) return;
+      setState(() {
+        _isSearching = false;
+        _errorMessage = appText(_isArabic).nearbyHealthcareSearchIsTemporarilyUnavailable;
+      });
+    }
+  }
+
+  /// Back to the pharmacies near the user.
+  void _clearSearch() {
+    _searchController.clear();
+    setState(() {
+      _searchResults = null;
+      _searchedQuery = '';
+      _selectedPlace = null;
+      _errorMessage = '';
+    });
+    unawaited(_moveToUser());
+  }
 
   bool get _isArabic {
     return Localizations.localeOf(
@@ -956,38 +1037,65 @@ class _PharmaciesMapScreenState extends State<PharmaciesMapScreen> {
                       ? const <BoxShadow>[]
                       : palette.cardShadow,
                 ),
+                // Search: typing narrows the list, Enter searches Lebanon.
                 child: Row(
                   children: [
                     const Icon(
-                      Icons
-                          .health_and_safety_outlined,
+                      Icons.search_rounded,
                       color:
                       PharmaLensColors.teal,
                     ),
 
                     const SizedBox(
                       width:
-                      9,
+                      6,
                     ),
 
                     Expanded(
-                      child: Text(
-                        appText(_isArabic).nearbyHealthcare,
-                        maxLines:
-                        1,
-                        overflow:
-                        TextOverflow.ellipsis,
-                        style:
-                        TextStyle(
-                          color:
-                          palette.textPrimary,
-                          fontSize:
-                          15.5,
-                          fontWeight:
-                          FontWeight.w900,
+                      child: TextField(
+                        controller: _searchController,
+                        textInputAction: TextInputAction.search,
+                        onChanged: (_) => setState(() {}),
+                        onSubmitted: (_) => _searchPharmacies(),
+                        style: TextStyle(
+                          color: palette.textPrimary,
+                          fontSize: 14.5,
+                          fontWeight: FontWeight.w700,
+                        ),
+                        decoration: InputDecoration(
+                          hintText: appText(_isArabic).searchPharmaciesByNameOrArea,
+                          filled: false,
+                          isDense: true,
+                          border: InputBorder.none,
+                          enabledBorder: InputBorder.none,
+                          focusedBorder: InputBorder.none,
+                          contentPadding: const EdgeInsets.symmetric(vertical: 10),
                         ),
                       ),
                     ),
+
+                    if (_isSearching)
+                      const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    else if (_searchController.text.isNotEmpty || _searchResults != null)
+                      IconButton(
+                        tooltip: appText(_isArabic).clearSearch,
+                        visualDensity: VisualDensity.compact,
+                        style: IconButton.styleFrom(backgroundColor: Colors.transparent, minimumSize: const Size(36, 36)),
+                        onPressed: _clearSearch,
+                        icon: Icon(Icons.close_rounded, color: palette.textSecondary),
+                      )
+                    else
+                      IconButton(
+                        tooltip: appText(_isArabic).search,
+                        visualDensity: VisualDensity.compact,
+                        style: IconButton.styleFrom(backgroundColor: Colors.transparent, minimumSize: const Size(36, 36)),
+                        onPressed: _searchPharmacies,
+                        icon: const Icon(Icons.arrow_forward_rounded, color: PharmaLensColors.teal),
+                      ),
                   ],
                 ),
               ),
@@ -1164,9 +1272,16 @@ class _PharmaciesMapScreenState extends State<PharmaciesMapScreen> {
       );
     }
 
+    final searched = _searchResults != null;
     return _NearbyPlacesPanel(
       places:
-      _places,
+      _visiblePlaces,
+      title: searched
+          ? appText(_isArabic).resultsForQuery(_searchedQuery)
+          : appText(_isArabic).closestToYou,
+      emptyText: searched
+          ? appText(_isArabic).noPharmaciesFoundFor(_searchedQuery)
+          : null,
       isArabic:
       _isArabic,
       kindLabel:
@@ -1400,6 +1515,8 @@ class _PharmaciesMapScreenState extends State<PharmaciesMapScreen> {
   void dispose() {
     _requestSerial++;
 
+    _searchController.dispose();
+
     _service.dispose();
 
     super.dispose();
@@ -1444,7 +1561,7 @@ class _PharmaciesMapScreenState extends State<PharmaciesMapScreen> {
               controller: _universalMapController,
               initialCenter: initialCenter,
               userLocation: userCoords,
-              places: _places,
+              places: _visiblePlaces,
               selectedPlace: _selectedPlace,
               initialZoom: userPosition == null ? 10.5 : 14.5,
               onPlaceSelected: _selectPlace,
@@ -1475,8 +1592,9 @@ class _PharmaciesMapScreenState extends State<PharmaciesMapScreen> {
               12,
               end:
               12,
+              // Above the phone's bottom bar, which the map runs under.
               bottom:
-              18,
+              18 + MediaQuery.paddingOf(context).bottom,
               child:
               _buildBottomPanel(),
             ),
@@ -1526,13 +1644,20 @@ class _NearbyPlacesPanel
     extends StatelessWidget {
   const _NearbyPlacesPanel({
     required this.places,
+    required this.title,
     required this.isArabic,
     required this.kindLabel,
     required this.distanceLabel,
     required this.onSelected,
+    this.emptyText,
   });
 
   final List<NearbyHealthcarePlace> places;
+
+  final String title;
+
+  /// Replaces the usual "nothing nearby" text (e.g. no search results).
+  final String? emptyText;
 
   final bool isArabic;
 
@@ -1606,7 +1731,9 @@ class _NearbyPlacesPanel
 
               Expanded(
                 child: Text(
-                  appText(isArabic).closestToYou,
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style:
                   TextStyle(
                     color:
@@ -1664,7 +1791,7 @@ class _NearbyPlacesPanel
               ),
               child: Center(
                 child: Text(
-                  appText(isArabic).noNearbyResultsYet,
+                  emptyText ?? appText(isArabic).noNearbyResultsYet,
                   textAlign:
                   TextAlign.center,
                   style:
