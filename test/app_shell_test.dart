@@ -47,6 +47,21 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('the assistant button stays above the bottom bar', (tester) async {
+    await setSize(tester, const Size(390, 844));
+    tester.view.padding = const FakeViewPadding(bottom: 48);
+    addTearDown(tester.view.resetPadding);
+    await tester.pumpWidget(app());
+    await tester.pump(const Duration(seconds: 1));
+
+    final assistant = tester.getRect(find.byTooltip('AI assistant').first);
+    final bar = tester.getRect(find.byKey(const Key('phone-nav')));
+    // The bar's widget starts with the space for the raised Scan button
+    // (20 px); its flat top is below that.
+    expect(assistant.bottom, lessThanOrEqualTo(bar.top + 20));
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('the Scan button asks for camera or gallery', (tester) async {
     await setSize(tester, const Size(390, 844));
     await tester.pumpWidget(app());

@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../app/app_shell.dart';
 import '../l10n/app_text.dart';
 import '../models/chat_message.dart';
 import '../services/chatbot_service.dart';
@@ -852,15 +853,25 @@ class FloatingChatbotButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final isArabic = Localizations.localeOf(context).languageCode.toLowerCase() == 'ar';
 
-    return FloatingActionButton(
-      heroTag: 'floating_chatbot_btn',
-      tooltip: appText(isArabic).aiAssistant,
-      onPressed: () => ChatbotView.showAsBottomSheet(context),
-      backgroundColor: PharmaLensColors.teal,
-      foregroundColor: Colors.white,
-      elevation: 3,
-      shape: const CircleBorder(),
-      child: const Icon(Icons.auto_awesome_rounded, size: 24),
+    // The phone's bottom bar runs over the pages (AppShell extendBody).
+    // Scaffold strips all padding from its floating button and places it
+    // from the system bars only, which put it under the app's bar; lift it
+    // above the bar (16 px of Scaffold's margin is already there).
+    final bar = AppShellScope.maybeOf(context)?.bottomBarHeight ?? 0;
+    final barLift = bar > 0 ? bar - 4 : 0.0;
+
+    return Padding(
+      padding: EdgeInsets.only(bottom: barLift),
+      child: FloatingActionButton(
+        heroTag: 'floating_chatbot_btn',
+        tooltip: appText(isArabic).aiAssistant,
+        onPressed: () => ChatbotView.showAsBottomSheet(context),
+        backgroundColor: PharmaLensColors.teal,
+        foregroundColor: Colors.white,
+        elevation: 3,
+        shape: const CircleBorder(),
+        child: const Icon(Icons.auto_awesome_rounded, size: 24),
+      ),
     );
   }
 }

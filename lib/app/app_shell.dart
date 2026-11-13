@@ -39,17 +39,24 @@ class AppShellScope extends InheritedWidget {
     required this.currentTab,
     required this.selectTab,
     required super.child,
+    this.bottomBarHeight = 0,
   });
 
   final AppTab currentTab;
   final void Function(AppTab tab) selectTab;
+
+  /// Height of the phone's bottom bar over the pages (0 on wider layouts and
+  /// while the keyboard hides it). Floating buttons lift themselves by it:
+  /// Scaffold places them above the system bars only.
+  final double bottomBarHeight;
 
   static AppShellScope? maybeOf(BuildContext context) {
     return context.dependOnInheritedWidgetOfExactType<AppShellScope>();
   }
 
   @override
-  bool updateShouldNotify(AppShellScope oldWidget) => currentTab != oldWidget.currentTab;
+  bool updateShouldNotify(AppShellScope oldWidget) =>
+      currentTab != oldWidget.currentTab || bottomBarHeight != oldWidget.bottomBarHeight;
 }
 
 /// Adaptive app frame: bottom navigation on phones, a rail on tablets and a
@@ -357,6 +364,7 @@ class _AppShellState extends State<AppShell> {
     return AppShellScope(
       currentTab: activeTab,
       selectTab: _select,
+      bottomBarHeight: compact ? _PhoneNavBar.flatHeight(context) : 0,
       child: PopScope(
         canPop: false,
         onPopInvokedWithResult: (didPop, _) {
@@ -398,6 +406,11 @@ class _PhoneNavBar extends StatelessWidget {
   final bool isArabic;
 
   static const double _barHeight = 70;
+
+  /// The flat part of the bar, down to the bottom of the screen; 0 while
+  /// the keyboard hides it.
+  static double flatHeight(BuildContext context) =>
+      MediaQuery.viewInsetsOf(context).bottom > 0 ? 0 : _barHeight + MediaQuery.paddingOf(context).bottom;
   static const double _lift = 20;
   static const double _halo = 74;
   static const double _button = 56;

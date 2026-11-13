@@ -83,6 +83,15 @@
             android:name="flutterEmbedding"
             android:value="2" />
 
+        <!-- Skia instead of Impeller. Measured on a TECNO LF7 (MediaTek,
+             OpenGL ES), profile build: Impeller drew the first frame at
+             2.15 s and missed 17 of 188 frames scrolling home; Skia drew it
+             at 0.59 s and missed 2 of 189 (integration_test/scroll_perf_test.dart).
+             Check again when Flutter changes or removes this option. -->
+        <meta-data
+            android:name="io.flutter.embedding.android.EnableImpeller"
+            android:value="false" />
+
         <!-- flutter_local_notifications: deliver and restore scheduled reminders -->
         <receiver
             android:exported="false"
