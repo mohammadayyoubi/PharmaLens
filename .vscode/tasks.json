@@ -1,0 +1,24 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      // Runs before every launch: creates lib/private/*.dart from the
+      // templates when missing, so a fresh clone compiles. Keys are added
+      // with setup.bat or by editing those files.
+      "label": "PharmaLens: create missing key files",
+      "type": "shell",
+      "command": "powershell",
+      "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "${workspaceFolder}/tools/setup.ps1", "-Quick"],
+      "presentation": { "reveal": "silent", "panel": "shared", "showReuseMessage": false },
+      "problemMatcher": []
+    },
+    {
+      "label": "PharmaLens: full setup (keys, packages, checks)",
+      "type": "shell",
+      "command": "powershell",
+      "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "${workspaceFolder}/tools/setup.ps1"],
+      "presentation": { "reveal": "always", "panel": "dedicated", "focus": true },
+      "problemMatcher": []
+    }
+  ]
+}

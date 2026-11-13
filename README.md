@@ -114,54 +114,24 @@ PharmaLens Architecture
 
 ## 🚀 Getting Started
 
-### Prerequisites
-- [Flutter SDK](https://docs.flutter.dev/get-started/install) (`>= 3.3.0`)
-- [Dart SDK](https://dart.dev/get-dart) (`>= 3.3.0`)
-- Android Studio / Xcode / VS Code with Flutter extension
-- A valid [Google Gemini API Key](https://aistudio.google.com/)
+### Prerequisites (install once)
+1. **Flutter 3.47.2** (stable): https://docs.flutter.dev/get-started/install/windows/mobile
+2. **Android Studio**: in *SDK Manager*, install **Android SDK Platform 37** and **Android SDK Command-line Tools**.
+3. **VS Code** with the **Flutter** extension (optional, recommended).
+4. On Windows: **Developer Mode** on (*Settings > System > For developers*). The setup below opens it for you.
 
-### Installation & Setup
+### Set up on a new computer (3 steps)
 
-1. **Clone the repository:**
+1. **Get the code**
    ```bash
-   git clone https://github.com/your-username/PharmaLens.git
-   cd PharmaLens
+   git clone https://github.com/mohammadayyoubi/PharmaLens.git
    ```
+2. **Double-click `setup.bat`** in the project folder. It checks the tools, asks for the API keys (press Enter to skip any), and downloads everything.
+3. **Open the folder in VS Code and press F5** (or type `flutter run` with a phone plugged in).
 
-2. **Install project dependencies:**
-   ```bash
-   flutter pub get
-   ```
+The API keys live in `lib/private/`, which is never uploaded to GitHub. Without a key the app still runs; only that feature is off (no Gemini key: no prescription reading or assistant; no Places key: no nearby pharmacies). Create your own keys at https://aistudio.google.com/apikey and in Google Cloud (Places API (New)), then edit the two files in `lib/private/` (or delete them and run `setup.bat` again).
 
-3. **Configure API Keys:**
-   Create or edit `lib/private/api_keys.dart`:
-   ```dart
-   class GeminiPrivateConfig {
-     static const List<String> geminiApiKeys = [
-       'YOUR_GEMINI_API_KEY_HERE',
-     ];
-
-     static const List<String> geminiModels = [
-       'gemini-3.5-flash-lite',
-       'gemini-flash-latest',
-     ];
-   }
-   ```
-   *(Optional)* Configure a Google Places key in `lib/private/google_maps_private_config.dart` (nearby pharmacies). The map itself is OpenStreetMap and needs no key.
-
-4. **Run the application:**
-   - **Chrome / Web:**
-     ```bash
-     flutter run -d chrome
-     ```
-   - **Windows Desktop:**
-     ```bash
-     flutter run -d windows
-     ```
-   - **Android / iOS Device:**
-     ```bash
-     flutter run
-     ```
+**Real speed:** debug runs are slow on phones. To judge speed, choose **PharmaLens (profile: real speed)** in VS Code's Run menu, or type `flutter run --profile`.
 
 ---
 

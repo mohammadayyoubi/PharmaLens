@@ -1,17 +1,34 @@
 {
+  // Every configuration first creates any missing key file
+  // (tools/setup.ps1 -Quick), so a fresh clone runs with F5.
   "version": "0.2.0",
   "configurations": [
+    {
+      "name": "PharmaLens (phone or selected device)",
+      "request": "launch",
+      "type": "dart",
+      "preLaunchTask": "PharmaLens: create missing key files"
+    },
+    {
+      "name": "PharmaLens (profile: real speed)",
+      "request": "launch",
+      "type": "dart",
+      "flutterMode": "profile",
+      "preLaunchTask": "PharmaLens: create missing key files"
+    },
     {
       "name": "PharmaLens (Chrome)",
       "request": "launch",
       "type": "dart",
-      "args": ["-d", "chrome", "--web-port=59115"]
+      "args": ["-d", "chrome", "--web-port=59115"],
+      "preLaunchTask": "PharmaLens: create missing key files"
     },
     {
       "name": "PharmaLens (Windows Desktop)",
       "request": "launch",
       "type": "dart",
-      "args": ["-d", "windows"]
+      "args": ["-d", "windows"],
+      "preLaunchTask": "PharmaLens: create missing key files"
     }
   ]
 }
