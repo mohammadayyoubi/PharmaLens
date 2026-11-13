@@ -1,11 +1,14 @@
 {
-  "version": "2026-10-19_WebMarketed20261005-19-10-2026",
-  "list_date": "2026-10-05",
-  "published": "2026-10-19",
-  "source_file": "WebMarketed20261005-19-10-2026.xls",
-  "source_url": "https://www.moph.gov.lb/userfiles/files/HealthCareSystem/Pharmaceuticals/DrugsPublicPriceList/5-10-2026/WebMarketed20261005-19-10-2026.xls",
-  "rows": 5774,
-  "with_ingredients": 5744,
-  "sha256": "dd68b194136dc8cccbcf72cbeda94c84f8eb73f8664e1da8e251166b77deab17",
-  "generated_at": "2026-10-27T02:44:58+00:00"
+  "version": "2026-11-11_WebMarketed20261111_4f7fbc23",
+  "list_date": "2026-11-11",
+  "published": "2026-11-11",
+  "rows": 5739,
+  "with_ingredients": 5709,
+  "sha256": "4f7fbc23859e8eb7e627184a0e2f1ca9d69e7cc67575a0c06b8f2afedc0c0460",
+  "generated_at": "2026-11-13T00:45:38+00:00",
+  "source_file": "WebMarketed20261111-.xls",
+  "source_url": "https://www.moph.gov.lb/userfiles/files/HealthCareSystem/Pharmaceuticals/DrugsPublicPriceList/11-11-2026/WebMarketed20261111-.xls",
+  "source_sha256": "9ddba71f26755fa0eb7f7878e51458a2ef03c53a7e0397ceb002404e020c28bc",
+  "source_last_modified": "2026-11-11T12:53:55+00:00",
+  "source_size": 3080192
 }
