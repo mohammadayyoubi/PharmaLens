@@ -11,12 +11,14 @@ PharmaLens (`pharmalens` package) is a Flutter app that reads prescriptions and 
 ```bash
 flutter pub get
 flutter run                                    # dev; see "Secrets" for keys
-flutter run --dart-define=GEMINI_API_KEY=...  # instead of lib/private/api_keys.dart
+flutter run --dart-define=GEMINI_API_KEY=...  # instead of lib/private/api_keys.dart (GEMINI_API_KEYS=a,b for several)
+flutter run -d chrome --web-port=59115        # the port the VS Code launch config uses; tools/run_auto_reload.ps1 wraps this with hot reload on save
 flutter analyze                                # flutter_lints is enabled; keep it at "No issues found"
 flutter test
 flutter test test/safety_logic_test.dart --plain-name "1000mg written matches a 1g product"
 flutter gen-l10n                               # after editing lib/l10n/*.arb
-python tools/update_moph_dataset.py           # fetch the newest MOPH sheet and rebuild the CSV if it changed (needs `pip install xlrd`)
+python tools/update_moph_dataset.py           # fetch the newest MOPH sheet and rebuild the CSV if it changed (needs `pip install xlrd`; --force rebuilds anyway)
+python tools/build_medicine_dataset.py --xls path/to/WebMarketed.xls   # rebuild the CSV from a sheet you already have; LNDI pages are cached in .moph_cache/
 python tools/generate_brand_assets.py         # redraw the logo, every app icon and the in-app illustrations (needs Pillow)
 ```
 
@@ -34,6 +36,8 @@ python tools/generate_brand_assets.py         # redraw the logo, every app icon 
 
 Changes to these files need a test in [test/safety_logic_test.dart](test/safety_logic_test.dart) (or next to it), using the real bundled catalog where possible:
 [medicine_equivalence.dart](lib/utils/medicine_equivalence.dart), [medicine_verification_service.dart](lib/services/medicine_verification_service.dart), [medication_safety_service.dart](lib/services/medication_safety_service.dart), [medical_domain_guard_service.dart](lib/services/medical_domain_guard_service.dart), [reminder_service.dart](lib/services/reminder_service.dart) and [medicine_reminder.dart](lib/models/medicine_reminder.dart).
+
+To load the real catalog in a test, do what `safety_logic_test.dart` does in `setUpAll`: call `SharedPreferences.setMockInitialValues({})`, then `await MophMedicineService().initialize()`. The services are singletons, so state carries over between tests in the same file.
 
 ## Architecture
 
@@ -55,7 +59,13 @@ Changes to these files need a test in [test/safety_logic_test.dart](test/safety_
   - Rows are keyed by MOPH code (`medicine_id`). List fields use `|`, and fields contain no newlines, because the CSV is parsed line by line. The `source`, `source_url` and `notes` columns were dropped (2026-10); the app fills the source link with `MophMedicineService.mophPublicUrl`.
   - `MophMedicineService` dedupes by code, so it keeps every strength and pack of a brand. It indexes products by code (`findById`) and normalizes search names once per product.
   - Search: scored on normalized brand, generic and ingredients; the last ranking is cached so paging does not re-score, and `countMatches` gives the total for labels. Text in Arabic letters ("بنادول") is matched by consonant skeleton ([phonetic_skeleton.dart](lib/utils/phonetic_skeleton.dart)).
-  - **Automatic updates:** [.github/workflows/update-moph-prices.yml](.github/workflows/update-moph-prices.yml) runs [tools/update_moph_dataset.py](tools/update_moph_dataset.py) every 6 hours. It finds the newest `WebMarketed*.xls` on the MOPH page (re-issues carry a second date, e.g. `WebMarketed20261005-19-10-2026.xls`), rebuilds the CSV, rejects suspicious builds (row drop, missing ingredients, or more than 15% of prices changing threefold), and commits the CSV with `lebanon_medicine_prices.json` (version, `published`, row count, `sha256`).
+  - **Automatic updates:** [.github/workflows/update-moph-prices.yml](.github/workflows/update-moph-prices.yml) runs [tools/update_moph_dataset.py](tools/update_moph_dataset.py) every 6 hours. MOPH names files by hand (`WebMarketed20261005-19-10-2026.xls`, `WebMarketed20261111-.xls`; a strict filename regex once missed a release for days while every run stayed green), so nothing may depend on one naming pattern:
+    - `find_sheet` recognizes the price sheet by file name ("marketed", not "non marketed") or link text ("Drugs Public Price List"), and dates it by the newest date in its path in any common format, else the server's `Last-Modified`.
+    - Whether to rebuild is decided by the sheet's content (`source_sha256` in the manifest), so a same-name re-upload is caught. `.xls` and `.xlsx` are both read, detected by file content.
+    - The run fails (GitHub emails the maintainer) when the page announces a newer release (heading or dated folder) than the sheet found, or has an unclassifiable spreadsheet that may be newer. Never turn these failures into a quiet "up to date".
+    - [tools/test_update_moph_dataset.py](tools/test_update_moph_dataset.py) covers the naming cases offline and runs before each update; add a case whenever MOPH surprises us.
+    - The build is rejected when it looks broken (row drop, missing ingredients, or more than 15% of prices changing threefold; the workflow's `allow_price_jumps` input accepts a real mass repricing). Then the CSV is committed with `lebanon_medicine_prices.json`.
+    - Manifest contract with installed apps (`MophDatasetManifest.isNewerThan`, tested in [moph_update_test.dart](test/moph_update_test.dart)): a later `published` wins; on the same date a different `version` with a later `generated_at` wins. The script never lowers `published` and puts the CSV hash in `version`. Apps already installed can't be changed, so keep any manifest change within this contract.
   - The app downloads from `MophMedicineService.dataBaseUrl` (raw GitHub by default; `--dart-define=MOPH_DATA_BASE_URL=`). `startAutoUpdates()` checks the manifest on every launch, then at most hourly on reconnect and app resume, and on Sync; the CSV is fetched only when the manifest is newer and must match its `sha256` and row count. Downloaded lists are saved to a file (browser storage on web), `datasetRevision` notifies the UI, and `lastPriceChanges` lists what changed. `progress` (stage plus 0..1) drives [sync_progress.dart](lib/widgets/sync_progress.dart): the home card, Settings and Medicines show "Checking for new data… 42%", and `MophSyncButton` can't be pressed again until `isSyncing` ends.
   - The app's base URL must be publicly readable. If the repo is private, set the workflow's `DATA_REPO` variable and `DATA_REPO_TOKEN` secret to mirror the files to a public repo, and point `MOPH_DATA_BASE_URL` there.
 - **Equivalence:** [lib/utils/medicine_equivalence.dart](lib/utils/medicine_equivalence.dart) is the canonical definition of "same ingredient / strength / form" and of price per tablet, ml or g. Alternatives, the cheapest-equivalent list, verification and safety checks all build on it; `MedicineNormalizer` is for search text only.

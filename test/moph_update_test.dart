@@ -53,6 +53,47 @@ void main() {
       expect(m('2026-10-19', version: 'b', generatedAt: '2').isNewerThan(m('2026-10-19', version: 'a', generatedAt: '1')), isTrue);
     });
 
+    // tools/update_moph_dataset.py writes these; installed apps must accept
+    // them whatever MOPH named the sheet.
+    test('manifests written by the update script move installed apps forward', () {
+      final october = MophDatasetManifest.tryParse(jsonEncode(<String, Object>{
+        'version': '2026-10-19_WebMarketed20261005-19-10-2026',
+        'list_date': '2026-10-05',
+        'published': '2026-10-19',
+        'rows': 5774,
+        'sha256': 'dd68b194',
+        'generated_at': '2026-10-27T02:44:58+00:00',
+        'source_file': 'WebMarketed20261005-19-10-2026.xls',
+      }))!;
+      Map<String, Object> next({required String published, required String sheetName, required String csvHash, required String generatedAt}) =>
+          <String, Object>{
+            'version': '${published}_${sheetName}_$csvHash',
+            'list_date': published,
+            'published': published,
+            'rows': 5739,
+            'with_ingredients': 5709,
+            'sha256': '${csvHash}0000',
+            'generated_at': generatedAt,
+            'source_file': '$sheetName.xls',
+            'source_url': 'https://www.moph.gov.lb/x/$sheetName.xls',
+            'source_sha256': 'abcd',
+            'source_last_modified': '${published}T12:53:55+00:00',
+            'source_size': 3080192,
+          };
+
+      final november = MophDatasetManifest.tryParse(jsonEncode(next(
+          published: '2026-11-11', sheetName: 'WebMarketed20261111', csvHash: '4f7fbc23', generatedAt: '2026-11-12T23:58:19+00:00')))!;
+      expect(november.isNewerThan(october), isTrue);
+      expect(november.isNewerThan(november), isFalse);
+
+      // MOPH re-uploads a corrected sheet under the same name the same day:
+      // same published date, new content hash in the version, later build.
+      final corrected = MophDatasetManifest.tryParse(jsonEncode(next(
+          published: '2026-11-11', sheetName: 'WebMarketed20261111', csvHash: '9a1b2c3d', generatedAt: '2026-11-11T18:00:00+00:00')))!;
+      expect(corrected.isNewerThan(MophDatasetManifest.tryParse(jsonEncode(next(
+          published: '2026-11-11', sheetName: 'WebMarketed20261111', csvHash: '4f7fbc23', generatedAt: '2026-11-11T13:00:00+00:00')))!), isTrue);
+    });
+
     test('the bundled manifest describes the bundled list', () async {
       final bundled = MophDatasetManifest.tryParse(await rootBundle.loadString('assets/medicines/lebanon_medicine_prices.json'))!;
       final dataset = parseMophDataset(await rootBundle.loadString('assets/medicines/lebanon_medicine_prices.csv'));

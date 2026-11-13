@@ -7,7 +7,13 @@
 # without an app release.
 #
 # Run it by hand from the Actions tab ("Run workflow"); tick "force" to
-# rebuild even when MOPH has not published a new sheet.
+# rebuild even when MOPH has not published a new sheet, and "allow price
+# jumps" when MOPH really repriced most medicines at once (the run refuses
+# such a list otherwise, in case the sheet is broken).
+#
+# A failed run means a new list could not be published (the MOPH page or
+# sheet changed in a way the script does not understand); its log says why.
+# GitHub emails failed scheduled runs to whoever last edited this file.
 
 name: Update MOPH medicine prices
 
@@ -18,6 +24,10 @@ on:
     inputs:
       force:
         description: Rebuild even if the MOPH sheet did not change
+        type: boolean
+        default: false
+      allow_price_jumps:
+        description: Accept a list where many prices changed more than threefold
         type: boolean
         default: false
 
@@ -40,11 +50,17 @@ jobs:
           python-version: "3.12"
 
       - name: Install dependencies
-        run: pip install xlrd==2.0.2
+        run: pip install xlrd==2.0.2 openpyxl==3.1.5
+
+      - name: Test sheet detection
+        run: python tools/test_update_moph_dataset.py
 
       - name: Check MOPH and rebuild the list
         id: update
-        run: python tools/update_moph_dataset.py ${{ inputs.force && '--force' || '' }}
+        run: >-
+          python tools/update_moph_dataset.py
+          ${{ inputs.force && '--force' || '' }}
+          ${{ inputs.allow_price_jumps && '--allow-price-jumps' || '' }}
 
       - name: Commit the new list
         if: steps.update.outputs.changed == 'true'
@@ -52,7 +68,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add assets/medicines/lebanon_medicine_prices.csv assets/medicines/lebanon_medicine_prices.json
-          git commit -m "data: MOPH price list ${{ steps.update.outputs.version }}"
+          git commit -m "${{ steps.update.outputs.message }}"
           # main may have moved while the job ran (someone pushed); replay the
           # data commit on top of it instead of failing.
           for attempt in 1 2 3; do
@@ -78,5 +94,5 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add lebanon_medicine_prices.csv lebanon_medicine_prices.json
-          git commit -m "MOPH price list ${{ steps.update.outputs.version }}" || exit 0
+          git commit -m "${{ steps.update.outputs.message }}" || exit 0
           git push

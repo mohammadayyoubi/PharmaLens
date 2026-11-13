@@ -13,7 +13,7 @@ The two are joined on (normalized brand name, public price), falling back to
 cannot be joined keep their price-list data with empty ingredients.
 
 Usage:
-  pip install xlrd
+  pip install xlrd openpyxl
   python tools/build_medicine_dataset.py --xls path/to/WebMarketed.xls \
       [--cache-dir .moph_cache] [--delay 2.0]
 
@@ -122,6 +122,47 @@ def load_lndi(cache_dir, delay):
     return rows
 
 
+REQUIRED_COLUMNS = ("Code", "Brand name", "Public Price LL")
+
+
+def read_sheet(path):
+    """(header, data rows, cell -> ISO date) for the first sheet of an .xls or
+    .xlsx file. The format is read from the file itself, not its name: MOPH
+    publishes both."""
+    with open(path, "rb") as handle:
+        magic = handle.read(8)
+
+    if magic.startswith(b"PK"):  # .xlsx (a zip)
+        import openpyxl
+
+        book = openpyxl.load_workbook(path, read_only=True, data_only=True)
+        rows = [list(row) for row in book.worksheets[0].iter_rows(values_only=True)]
+        rows = [["" if value is None else value for value in row] for row in rows]
+        if not rows:
+            raise SystemExit(f"{path} is empty.")
+
+        def to_date(value):
+            if isinstance(value, datetime.datetime):
+                return value.date().isoformat()
+            if isinstance(value, datetime.date):
+                return value.isoformat()
+            if isinstance(value, (int, float)):
+                return excel_date(value, 0)
+            return ""
+
+        return [str(h).strip() for h in rows[0]], rows[1:], to_date
+
+    if magic.startswith(b"\xd0\xcf\x11\xe0"):  # .xls (BIFF)
+        book = xlrd.open_workbook(path)
+        sheet = book.sheet_by_index(0)
+        rows = [sheet.row_values(r) for r in range(sheet.nrows)]
+        return [str(h).strip() for h in rows[0]], rows[1:], lambda value: excel_date(value, book.datemode)
+
+    raise SystemExit(
+        f"{path} is not an Excel file (starts with {magic!r}); MOPH may have returned an error page."
+    )
+
+
 def excel_date(value, datemode):
     try:
         return datetime.datetime(*xlrd.xldate_as_tuple(float(value), datemode)).date().isoformat()
@@ -137,10 +178,14 @@ def main():
     parser.add_argument("--output", default=OUTPUT)
     args = parser.parse_args()
 
-    book = xlrd.open_workbook(args.xls)
-    sheet = book.sheet_by_index(0)
-    header = [str(h).strip() for h in sheet.row_values(0)]
+    header, data_rows, to_date = read_sheet(args.xls)
     col = {name: index for index, name in enumerate(header)}
+    missing = [name for name in REQUIRED_COLUMNS if name not in col]
+    if missing:
+        raise SystemExit(
+            f"The MOPH sheet has no {', '.join(missing)} column; its columns are {header}. "
+            "MOPH changed the sheet layout: update build_medicine_dataset.py."
+        )
 
     lndi = load_lndi(args.cache_dir, args.delay)
     by_price, by_strength, by_brand = {}, {}, {}
@@ -157,8 +202,8 @@ def main():
         return candidates[0] if len(ingredient_sets) == 1 else None
 
     output_rows, joined = [], 0
-    for r in range(1, sheet.nrows):
-        values = sheet.row_values(r)
+    for values in data_rows:
+        values = list(values) + [""] * (len(header) - len(values))
 
         def get(name):
             value = values[col[name]] if name in col else ""
@@ -172,7 +217,9 @@ def main():
         if not brand:
             continue
         price_raw = values[col["Public Price LL"]]
-        price = int(round(float(price_raw))) if str(price_raw).strip() else None
+        # A number, or text such as "1,234,567" if MOPH ever formats it.
+        price_text = re.sub(r"[^\d.]", "", str(price_raw))
+        price = int(round(float(price_text))) if price_text.strip(".") else None
         key = norm(brand)
 
         match = pick(by_price.get((key, price), []))
@@ -184,7 +231,7 @@ def main():
             joined += 1
 
         ingredients = split_ingredients(match["ingredients"]) if match else []
-        updated = excel_date(values[col["Exch_Dates"]], book.datemode) if "Exch_Dates" in col else ""
+        updated = to_date(values[col["Exch_Dates"]]) if "Exch_Dates" in col else ""
         form = get("Form") or (match["form"] if match else "")
 
         output_rows.append({
