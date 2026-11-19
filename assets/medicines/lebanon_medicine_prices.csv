@@ -213,6 +213,12 @@ medicine_id,registration_number,brand_name,generic_name,active_ingredients,atc_c
 10527,21920/1,ALMOVITAE,Almotriptan,Almotriptan,N02CC05,G,12.5mg,"Tablet, film coated",6,SAG Manufacturing SLU,Promopharm S.A.R.L.,Spain,1148985,LBP,2026-11-11
 11985,112823/1,ALOPEXY,Minoxidil,Minoxidil,D11AX01,G,5%,Cutaneous solution,60ml,Pierre Fabre Medicament Production,Mersaco,France,896343,LBP,2026-11-11
 8286,55315/1,ALOXI,Palonosetron HCl,Palonosetron HCl,A04AA05,B,0.25mg/5ml,Injectable solution,1Vial,Helsinn Birex Pharmaceuticals Ltd,Mersaco,Ireland,3656595,LBP,2026-11-11
+8890,70215/1,ALPEEN,Erythropoietin recombinant human (Epoetin alfa),Erythropoietin recombinant human (Epoetin alfa),B03XA01,BioTech,4000IU,Injectable solution for IV/SC use,10 vials,Arwan Pharmaceutical Industries Lebanon SAL,Raymond Georges Abou Adal & Co,Lebanon,8728144,LBP,2026-11-11
+9830,61819/1,ALPEEN,Erythropoietin recombinant human (Epoetin alfa),Erythropoietin recombinant human (Epoetin alfa),B03XA01,BioTech,4000IU,Injectable solution for IV/SC use,1 vials,Arwan Pharmaceutical Industries Lebanon SAL,Raymond Georges Abou Adal & Co,Lebanon,1127036,LBP,2026-11-11
+10774,4922/1,ALPEEN,Erythropoietin recombinant human (Epoetin alfa),Erythropoietin recombinant human (Epoetin alfa),B03XA01,BioTech,4000IU,Injectable solution for IV/SC use,5 vials,Arwan Pharmaceutical Industries Lebanon SAL,Raymond Georges Abou Adal & Co,Lebanon,4748244,LBP,2026-11-11
+10775,108621/1,ALPEEN,Erythropoietin recombinant human (Epoetin alfa),Erythropoietin recombinant human (Epoetin alfa),B03XA01,BioTech,"10,000IU",Injectable solution for IV/SC use,1vial,Arwan Pharmaceutical Industries Lebanon SAL,Raymond Georges Abou Adal & Co,Lebanon,4036903,LBP,2026-11-11
+11473,91122/1,ALPEEN,Erythropoietin recombinant human (Epoetin alfa),Erythropoietin recombinant human (Epoetin alfa),B03XA01,BioTech,"40,000IU",Injectable solution for IV/SC use,1Vial,Arwan Pharmaceutical Industries Lebanon SAL,Raymond Georges Abou Adal & Co,Lebanon,11210836,LBP,2026-11-11
+11692,129323/1,ALPEEN,Erythropoietin recombinant human (Epoetin alfa),Erythropoietin recombinant human (Epoetin alfa),B03XA01,BioTech,"10,000IU",Injectable solution for IV/SC use,3Vials,Arwan Pharmaceutical Industries Lebanon SAL,Raymond Georges Abou Adal & Co,Lebanon,10661285,LBP,2026-11-11
 11730,85723/1,ALPHAGAN P,Brimonidine tartrate,Brimonidine tartrate,S01EA05,B,0.15%,Sterile ophtalmic solution,5ml,Allergan,Mersaco,USA,999819,LBP,2026-11-11
 12203,120124/1,ALPHAGAN P,Brimonidine tartrate,Brimonidine tartrate,S01EA05,B,0.1%,Sterile ophtalmic solution,5ml,Allergan,Mersaco,USA,999819,LBP,2026-11-11
 11580,119320/1,ALPHANOVA,Brimonidine tartrate,Brimonidine tartrate,S01EA05,G,0.15%,Sterile ophtalmic solution,5ml,Orchidia Pharmaceutical Industries,Macromed S.A.R.L.,Egypt,599354,LBP,2026-11-11
@@ -1926,6 +1932,8 @@ medicine_id,registration_number,brand_name,generic_name,active_ingredients,atc_c
 12525,148325/1,EPLERENONE ARROW,Eplerenone,Eplerenone,C03DA04,G,25mg,Comprimes pellicules,90,Synthon Hispania SL,Darapharma S.A.L.,Spain,4918464,LBP,2026-11-11
 9025,156916/1,EPLERENONE BIOGARAN,Eplerenone,Eplerenone,C03DA04,G,25mg,Comprimes pellicules,30,Bluepharma Industria Farmaceutica SA,Commercial and Trading Ressources SAL (CTR),Portugal,1849127,LBP,2026-11-11
 9026,157016/1,EPLERENONE BIOGARAN,Eplerenone,Eplerenone,C03DA04,G,50mg,Comprimes pellicules,30,Bluepharma Industria Farmaceutica SA,Commercial and Trading Ressources SAL (CTR),Portugal,1849127,LBP,2026-11-11
+6442,222454/08,EPOTEX 4000 BENTA,Erythropoietin recombinant human (Epoetin alfa),Erythropoietin recombinant human (Epoetin alfa),B03XA01,BioTech,"4,000IU",Injectable,,Benta SAL,Benta Trading Co s.a.l.,Lebanon,1209458,LBP,2026-11-11
+11531,119723/1,EPOTEX 4000 BENTA,Erythropoietin recombinant human (Epoetin alfa),Erythropoietin recombinant human (Epoetin alfa),B03XA01,BioTech,"4,000IU",Injectable solution,6Prefilled syringes,Benta SAL,Benta Trading Co s.a.l.,Lebanon,5488046,LBP,2026-11-11
 4495,58/95,EPSOM SALT,Magnesium sulfate,Magnesium sulfate,A06AD04,G,40g,Granules,40g,Mephico SAL,Mephico S.A.L.,Lebanon,89590,LBP,2026-11-11
 1860,405950/00,ERACID 250,Clarithromycin,Clarithromycin,J01FA09,G,250mg,"Tablet, coated",14,The Jordanian Pharmaceutical Manufacturing Company (JPM),C. Catafago & Co,Jordan,446156,LBP,2026-11-11
 1861,973920/02,ERACID 500,Clarithromycin,Clarithromycin,J01FA09,G,500mg,"Tablet, coated",14,The Jordanian Pharmaceutical Manufacturing Company (JPM),C. Catafago & Co,Jordan,628918,LBP,2026-11-11
@@ -3483,6 +3491,7 @@ medicine_id,registration_number,brand_name,generic_name,active_ingredients,atc_c
 5717,219710/09,NEGACEF,Ceftazidime (pentahydrate),Ceftazidime (pentahydrate),J01DD02,G,1g,IM/IV,10Vials,Julphar,Pharmanet Drugstore S.A.R.L.,United Arab Emirates,4421242,LBP,2026-11-11
 9919,55619/1,NEO SULFA,Sulfanilamide,Sulfanilamide,D06BA05,G,12g,Powder,12g,Pharmadex,Pharmadex,Lebanon,151022,LBP,2026-11-11
 2289,38852,NEO-CODION,Codeine Camphosulfonate + Sulfogaiacol + Grindelia soft extract,Codeine Camphosulfonate | Sulfogaiacol | Grindelia soft extract,R05FA01,B,,Comprimés enrobés,20,Sophartex,Pharmamedic S.A.R.L.,France,258018,LBP,2026-11-11
+5343,222447/08,NEOGRASTIM 30,Filgrastim,Filgrastim,L03AA02,BioTech,30MU= 300mcg,Injectable SC/IV,1ml,Benta SAL,Benta Trading Co s.a.l.,Lebanon,1970969,LBP,2026-11-11
 12067,51823/1,NEOOPRAZOLE,Omeprazole,Omeprazole,A02BC01,G,20mg,"Capsule, hard, gastro-resistant",56,Pharminicio SL,Mediterranean Pharmaceutical Company,Spain,407184,LBP,2026-11-11
 12199,129924/1,NEO-PAN,Nefopam HCl,Nefopam HCl,N02BG06,G,20mg/2ml,Solution for injection,10Ampoules x 2ml,Medochemie Ltd,New Allpharma,Cyprus,483783,LBP,2026-11-11
 12113,69924/1,NEOSET,Granisetron (HCl),Granisetron (HCl),A04AA02,G,3mg/3ml,Solution for IV injection,1Ampoule,Deva Holding AS,New Europharm,Turkey,405840,LBP,2026-11-11
@@ -5174,7 +5183,7 @@ medicine_id,registration_number,brand_name,generic_name,active_ingredients,atc_c
 4266,194928/05,TRILTEC,Ramipril,Ramipril,C09AA05,G,10mg,Capsule,30,Algorithm S.A.L.,Droguerie de l'Union,Lebanon,575932,LBP,2026-11-11
 5576,221672/08,TRILTEC PLUS,Ramipril + Hydrochlorothiazide,Ramipril | Hydrochlorothiazide,C09BA05,G,5mg/12.5mg,Tablet,30,Algorithm S.A.L.,Droguerie de l'Union,Lebanon,2189823,LBP,2026-11-11
 5577,221880/08,TRILTEC PLUS,Ramipril + Hydrochlorothiazide,Ramipril | Hydrochlorothiazide,C09BA05,G,10mg/12.5mg,Tablet,30,Algorithm S.A.L.,Droguerie de l'Union,Lebanon,2243577,LBP,2026-11-11
-4564,973302,TRIMEDIL FORTE,O-(?-hydroxyethyl)-rutosides + Ascorbic acid + Dimethindene + Phenylephrine HCl + Paracetamol,O-(?-hydroxyethyl)-rutosides | Ascorbic acid | Dimethindene | Phenylephrine HCl | Paracetamol,R05X,G,,Capsule,20,Mephico SAL,Mephico S.A.L.,Lebanon,386515,LBP,2026-11-11
+4564,973302,TRIMEDIL FORTE,O-(ß-hydroxyethyl)-rutosides + Ascorbic acid + Dimethindene + Phenylephrine HCl + Paracetamol,O-(ß-hydroxyethyl)-rutosides | Ascorbic acid | Dimethindene | Phenylephrine HCl | Paracetamol,R05X,G,,Capsule,20,Mephico SAL,Mephico S.A.L.,Lebanon,386515,LBP,2026-11-11
 11114,23321/1,TRINITRINA,Nitroglycerine,Nitroglycerine,C01DA02,G,50mg/50ml,Concentrate for solution for infusion,5Vials,Fisiopharma SRL,Drugstore 3U S.A.R.L.,Italy,6212584,LBP,2026-11-11
 8721,167715/1,TRINOMIA,Acetylsalicylic acid + Atorvastatin + Ramipril,Acetylsalicylic acid | Atorvastatin | Ramipril,C10BX06,B,100mg/20mg/2.5mg,"Capsule, hard",28,Ferrer Internacional SA,Mersaco,Spain,1029383,LBP,2026-11-11
 8722,167815/1,TRINOMIA,Acetylsalicylic acid + Atorvastatin + Ramipril,Acetylsalicylic acid | Atorvastatin | Ramipril,C10BX06,B,100mg/20mg/5mg,"Capsule, hard",28,Ferrer Internacional SA,Mersaco,Spain,1236335,LBP,2026-11-11
